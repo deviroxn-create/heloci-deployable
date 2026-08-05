@@ -62,59 +62,27 @@ const { error, data: authData } = await supabase.auth.signInWithPassword({
 
       if (error) {
         setBusy(false);
-        // DEBUG: Log the actual error
+        // Log the error for debugging
         console.error("Supabase login error:", {
           status: error.status,
           message: error.message,
           name: error.name
         });
-        
-        // WORKAROUND FOR DEV: If it's an email confirmation issue, try to bypass it
-        // by directly using the session if email_verified is true in metadata
-        if (
-          error.message.toLowerCase().includes("email not confirmed") &&
-          process.env.NODE_ENV === "development"
-        ) {
-          console.log("Email confirmation issue detected - attempting workaround for dev...");
-          
-          // In dev, if the user exists with email_verified=true, allow login
-          // This is a development workaround - production should enforce confirmation
-          try {
-            const meResponse = await fetch("/api/auth/me", {
-              method: "GET"
-            });
-            
-            if (meResponse.ok) {
-              const userData = await meResponse.json();
-              if (userData.id) {
-                // User exists and is authenticated - bypass this error for dev
-                console.log("Dev workaround: User authenticated despite confirmation error");
-                // Continue with redirect logic below
-                authError = null;
-              }
-            }
-          } catch (e) {
-            console.error("Dev workaround failed:", e);
-          }
-        }
 
-        if (authError) {
-          // Show error only if workaround didn't work
-          if (
-            error.message.toLowerCase().includes("invalid login") ||
-            error.message.toLowerCase().includes("invalid credentials") ||
-            error.message.toLowerCase().includes("email not confirmed")
-          ) {
-            setNeedsConfirmation(true);
-            setResendEmail(values.email);
-            setError(
-              "Sign in failed. If you just registered, please check your inbox for a confirmation link first."
-            );
-          } else {
-            setError(error.message);
-          }
-          return;
+        if (
+          error.message.toLowerCase().includes("invalid login") ||
+          error.message.toLowerCase().includes("invalid credentials") ||
+          error.message.toLowerCase().includes("email not confirmed")
+        ) {
+          setNeedsConfirmation(true);
+          setResendEmail(values.email);
+          setError(
+            "Sign in failed. If you just registered, please check your inbox for a confirmation link first."
+          );
+        } else {
+          setError(error.message);
         }
+        return;
       }
     } catch (err) {
       console.error("Login exception:", err);
@@ -124,12 +92,12 @@ const { error, data: authData } = await supabase.auth.signInWithPassword({
     }
 
     if (authError && authError.message.toLowerCase().includes("email not confirmed")) {
-      // Email confirmation still failing - don't proceed
+      // Email not confirmed - user must verify email first
       setBusy(false);
       setNeedsConfirmation(true);
       setResendEmail(values.email);
       setError(
-        "Sign in failed. If you just registered, please check your inbox for a confirmation link first."
+        "Please verify your email before signing in. If you don't see the confirmation email, click the resend button below."
       );
       return;
     }
