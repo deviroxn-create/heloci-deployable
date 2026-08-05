@@ -1,4 +1,4 @@
-import { notificationService } from "@/lib/notifications/notification.service";
+import { publishDomainEvent } from "@/lib/events/domain-event-publisher";
 import { prisma } from "@/lib/prisma/client";
 import { loadApplicantProfile } from "@/services/applicant-profile.service";
 
@@ -40,8 +40,12 @@ export async function generateRecommendations(userId: string): Promise<void> {
       missingFields.push("employment.status");
     }
 
-    if (missingFields.length > 0) {
-      created.push({ programId: result.programId, reason: `Complete ${missingFields.join(", ")}`, missingFields });
+    if (missingFields.length > 0 || failed.length === 0) {
+      created.push({
+        programId: result.programId,
+        reason: missingFields.length > 0 ? `Complete ${missingFields.join(", ")}` : "Complete your profile to unlock more matches",
+        missingFields: missingFields.length > 0 ? missingFields : ["income.monthlyIncome", "employment.status"]
+      });
     }
   }
 
@@ -57,11 +61,11 @@ export async function generateRecommendations(userId: string): Promise<void> {
   })));
 
   if (created.length > 0) {
-    await notificationService.notify("new_recommendation_available", {
+    publishDomainEvent("recommendation.available", {
       userId,
       programCount: created.length,
       missingFields: created.flatMap((item) => item.missingFields).join(", "),
-      locale: "en"
+      locale: "en",
     });
   }
 }

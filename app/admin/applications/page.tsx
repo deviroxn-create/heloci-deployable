@@ -1,84 +1,112 @@
-import { Search, Filter, Eye, MessageSquare } from "lucide-react";
+"use client";
+
+import Link from "next/link";
+import { useState, useEffect } from "react";
+import { Search, Filter, Eye, MessageSquare, ArrowRight } from "lucide-react";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { Button } from "@/components/ui/button";
 
-const applications = [
-  {
-    id: "APP-5412",
-    name: "Amara Singh",
-    email: "amara.singh@email.com",
-    program: "Family Housing",
-    status: "Pending",
-    submitted: "Jun 24, 2026",
-    income: "$32,000",
-    household: 4
-  },
-  {
-    id: "APP-5411",
-    name: "Carlos Reyes",
-    email: "carlos.r@email.com",
-    program: "Veteran Housing",
-    status: "Under review",
-    submitted: "Jun 22, 2026",
-    income: "$28,500",
-    household: 2
-  },
-  {
-    id: "APP-5410",
-    name: "Lena Fischer",
-    email: "lena.f@email.com",
-    program: "Emergency Shelter",
-    status: "Approved",
-    submitted: "Jun 20, 2026",
-    income: "$21,000",
-    household: 3
-  },
-  {
-    id: "APP-5409",
-    name: "Darius Webb",
-    email: "d.webb@email.com",
-    program: "Family Housing",
-    status: "Rejected",
-    submitted: "Jun 18, 2026",
-    income: "$58,000",
-    household: 2
-  },
-  {
-    id: "APP-5408",
-    name: "Priya Patel",
-    email: "priya.p@email.com",
-    program: "Transitional Housing",
-    status: "Waitlisted",
-    submitted: "Jun 17, 2026",
-    income: "$26,000",
-    household: 5
-  },
-  {
-    id: "APP-5407",
-    name: "Marcus Johnson",
-    email: "marcus.j@email.com",
-    program: "Veteran Housing",
-    status: "Approved",
-    submitted: "Jun 15, 2026",
-    income: "$19,000",
-    household: 1
-  }
-];
+interface Case {
+  id: string;
+  caseId: string;
+  applicantName: string;
+  applicantEmail: string;
+  programName: string;
+  status: string;
+  matchScore: number | null;
+  priority: "high" | "medium" | "low";
+  assignedTo: { id: string; name: string | null } | null;
+  submittedAt: Date | null;
+  lastActivityAt: Date;
+  missingDocuments: number;
+  totalDocumentsRequested: number;
+}
+
+interface CaseListResult {
+  cases: Case[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
 
 const statusStyles: Record<string, string> = {
-  Pending: "bg-warning/10 text-warning",
-  "Under review": "bg-brand/10 text-brand",
-  Approved: "bg-success/10 text-success",
-  Rejected: "bg-error/10 text-error",
-  Waitlisted: "bg-slate-100 text-slate-700"
+  pending: "bg-warning/10 text-warning",
+  under_review: "bg-brand/10 text-brand",
+  approved: "bg-success/10 text-success",
+  rejected: "bg-error/10 text-error",
+  waitlisted: "bg-slate-100 text-slate-700"
 };
 
-const tabs = ["All", "Pending", "Under review", "Approved", "Rejected", "Waitlisted"];
+const statusLabels: Record<string, string> = {
+  pending: "Pending",
+  under_review: "Under Review",
+  approved: "Approved",
+  rejected: "Rejected",
+  waitlisted: "Waitlisted",
+  assigned: "Assigned",
+  waiting_documents: "Waiting Documents"
+};
+
+const tabs = ["All", "Pending", "Under Review", "Approved", "Rejected", "Waitlisted"];
 
 export default function AdminApplicationsPage() {
+  const [data, setData] = useState<CaseListResult | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  useEffect(() => {
+    const fetchCases = async () => {
+      try {
+        setLoading(true);
+        const params = new URLSearchParams({
+          page: currentPage.toString(),
+          pageSize: "25"
+        });
+
+        if (selectedStatus && selectedStatus !== "All") {
+          params.append("status", selectedStatus.toLowerCase());
+        }
+
+        if (searchTerm) {
+          params.append("search", searchTerm);
+        }
+
+        const response = await fetch(`/api/cases?${params}`);
+        if (!response.ok) {
+          throw new Error("Failed to fetch cases");
+        }
+
+        const result = await response.json();
+        setData(result);
+        setError(null);
+      } catch (err: any) {
+        setError(err.message);
+        console.error("Error fetching cases:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCases();
+  }, [currentPage, selectedStatus, searchTerm]);
+
+  const summaryStats = data
+    ? {
+        Total: data.total,
+        Pending: data.cases.filter((c) => c.status === "pending").length,
+        "Under Review": data.cases.filter((c) => c.status === "under_review").length,
+        Approved: data.cases.filter((c) => c.status === "approved").length,
+        Rejected: data.cases.filter((c) => c.status === "rejected").length
+      }
+    : { Total: 0, Pending: 0, "Under Review": 0, Approved: 0, Rejected: 0 };
+
   return (
     <AdminShell
-      title="Application queue"
+      title="Case Queue"
       description="Review, filter, and take action on all housing applications."
       actions={
         <Button size="sm">
@@ -89,16 +117,10 @@ export default function AdminApplicationsPage() {
     >
       {/* Summary strip */}
       <div className="grid gap-4 sm:grid-cols-5">
-        {[
-          { label: "Total", value: "248", color: "text-slate-950" },
-          { label: "Pending", value: "89", color: "text-warning" },
-          { label: "Under review", value: "56", color: "text-brand" },
-          { label: "Approved", value: "76", color: "text-success" },
-          { label: "Rejected", value: "27", color: "text-error" }
-        ].map((item) => (
-          <div key={item.label} className="rounded-[24px] border border-border bg-white px-5 py-4 shadow-soft text-center">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">{item.label}</p>
-            <p className={`mt-2 text-2xl font-semibold tabular-nums ${item.color}`}>{item.value}</p>
+        {Object.entries(summaryStats).map(([label, value]) => (
+          <div key={label} className="rounded-[24px] border border-border bg-white px-5 py-4 shadow-soft text-center">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">{label}</p>
+            <p className="mt-2 text-2xl font-semibold tabular-nums text-slate-950">{value}</p>
           </div>
         ))}
       </div>
@@ -111,6 +133,11 @@ export default function AdminApplicationsPage() {
             <input
               type="search"
               placeholder="Search by name, ID, or program…"
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
               className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
               aria-label="Search applications"
             />
@@ -122,8 +149,12 @@ export default function AdminApplicationsPage() {
             <button
               key={tab}
               type="button"
+              onClick={() => {
+                setSelectedStatus(tab);
+                setCurrentPage(1);
+              }}
               className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold transition ${
-                tab === "All"
+                (selectedStatus === tab || (!selectedStatus && tab === "All"))
                   ? "bg-brand text-white"
                   : "bg-slate-100 text-slate-600 hover:bg-slate-200"
               }`}
@@ -134,67 +165,136 @@ export default function AdminApplicationsPage() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="rounded-[28px] border border-border bg-white shadow-soft overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-slate-50">
-                <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Applicant</th>
-                <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Program</th>
-                <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Income</th>
-                <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Household</th>
-                <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Submitted</th>
-                <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Status</th>
-                <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {applications.map((app) => (
-                <tr key={app.id} className="transition hover:bg-slate-50">
-                  <td className="px-5 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-xs font-bold text-brand">
-                        {app.name.charAt(0)}
-                      </div>
-                      <div>
-                        <p className="font-semibold text-slate-950">{app.name}</p>
-                        <p className="text-xs text-slate-500">{app.id}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-5 py-4 text-slate-700">{app.program}</td>
-                  <td className="px-5 py-4 text-slate-700 tabular-nums">{app.income}</td>
-                  <td className="px-5 py-4 text-slate-700">{app.household}</td>
-                  <td className="px-5 py-4 text-slate-500 text-xs">{app.submitted}</td>
-                  <td className="px-5 py-4">
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusStyles[app.status]}`}>
-                      {app.status}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4">
-                    <div className="flex items-center gap-2">
-                      <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-border bg-white text-slate-600 transition hover:border-brand hover:text-brand" aria-label={`View ${app.name}`}>
-                        <Eye className="h-3.5 w-3.5" />
-                      </button>
-                      <button type="button" className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-border bg-white text-slate-600 transition hover:border-brand hover:text-brand" aria-label={`Message ${app.name}`}>
-                        <MessageSquare className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* Table or Loading/Error State */}
+      {error ? (
+        <div className="rounded-[28px] border border-error/20 bg-error/5 p-6 text-center">
+          <p className="text-error font-semibold">Error loading cases: {error}</p>
         </div>
-        <div className="flex items-center justify-between border-t border-border px-5 py-4 text-sm text-slate-500">
-          <p>Showing 6 of 248</p>
-          <div className="flex gap-2">
-            <button type="button" className="rounded-xl border border-border bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50">Previous</button>
-            <button type="button" className="rounded-xl bg-brand px-3 py-1.5 text-xs font-medium text-white">Next</button>
+      ) : loading ? (
+        <div className="rounded-[28px] border border-border bg-white shadow-soft p-12 text-center">
+          <p className="text-slate-500">Loading cases...</p>
+        </div>
+      ) : !data?.cases.length ? (
+        <div className="rounded-[28px] border border-border bg-white shadow-soft p-12 text-center">
+          <p className="text-slate-500">No cases found</p>
+        </div>
+      ) : (
+        <>
+          <div className="rounded-[28px] border border-border bg-white shadow-soft overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-slate-50">
+                    <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Applicant</th>
+                    <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Program</th>
+                    <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Assigned To</th>
+                    <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Match Score</th>
+                    <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Submitted</th>
+                    <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Status</th>
+                    <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Docs</th>
+                    <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {data.cases.map((caseItem) => (
+                    <tr key={caseItem.id} className="transition hover:bg-slate-50">
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-xs font-bold text-brand">
+                            {caseItem.applicantName?.charAt(0).toUpperCase() || "?"}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-slate-950">{caseItem.applicantName}</p>
+                            <p className="text-xs text-slate-500">{caseItem.caseId}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-slate-700">{caseItem.programName}</td>
+                      <td className="px-5 py-4 text-slate-700 text-xs">
+                        {caseItem.assignedTo ? caseItem.assignedTo.name || "Assigned" : "-"}
+                      </td>
+                      <td className="px-5 py-4">
+                        {caseItem.matchScore ? (
+                          <span className="text-sm font-semibold text-brand">{caseItem.matchScore}%</span>
+                        ) : (
+                          <span className="text-xs text-slate-400">-</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-4 text-slate-500 text-xs">
+                        {caseItem.submittedAt ? new Date(caseItem.submittedAt).toLocaleDateString() : "-"}
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusStyles[caseItem.status] || "bg-slate-100 text-slate-700"}`}>
+                          {statusLabels[caseItem.status] || caseItem.status}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4">
+                        {caseItem.missingDocuments > 0 ? (
+                          <span className="text-xs font-semibold text-warning">
+                            {caseItem.missingDocuments}/{caseItem.totalDocumentsRequested}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-400">-</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2">
+                          <Link href={`/admin/cases/${caseItem.id}`}>
+                            <button
+                              type="button"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-border bg-white text-slate-600 transition hover:border-brand hover:text-brand"
+                              aria-label={`View ${caseItem.applicantName}`}
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                            </button>
+                          </Link>
+                          <Link href={`/admin/cases/${caseItem.id}?tab=communication`}>
+                            <button
+                              type="button"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-border bg-white text-slate-600 transition hover:border-brand hover:text-brand"
+                              aria-label={`Message ${caseItem.applicantName}`}
+                            >
+                              <MessageSquare className="h-3.5 w-3.5" />
+                            </button>
+                          </Link>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            <div className="flex items-center justify-between border-t border-border px-5 py-4 text-sm text-slate-500">
+              <p>
+                Showing {(currentPage - 1) * data.pageSize + 1} to {Math.min(currentPage * data.pageSize, data.total)} of {data.total}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1}
+                  className="rounded-xl border border-border bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                <span className="px-3 py-1.5 text-xs">
+                  {currentPage} / {data.totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(Math.min(data.totalPages, currentPage + 1))}
+                  disabled={currentPage >= data.totalPages}
+                  className="rounded-xl bg-brand px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand/90 disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        </>
+      )}
     </AdminShell>
   );
 }

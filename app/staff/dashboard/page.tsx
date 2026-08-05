@@ -96,7 +96,7 @@ export default function StaffDashboardPage() {
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand">Inbox</p>
               <h2 className="mt-1 text-lg font-semibold text-slate-950">Recent messages</h2>
             </div>
-            <Link href="/staff/messages">
+            <Link href="/staff/communication/messages">
               <button type="button" className="text-xs font-semibold text-brand hover:underline">View all</button>
             </Link>
           </div>
@@ -112,7 +112,7 @@ export default function StaffDashboardPage() {
               </div>
             ))}
           </div>
-          <Link href="/staff/messages" className="mt-4 flex items-center gap-1 text-xs font-semibold text-brand hover:underline">
+          <Link href="/staff/communication/messages" className="mt-4 flex items-center gap-1 text-xs font-semibold text-brand hover:underline">
             Open inbox <ArrowRight className="h-3 w-3" />
           </Link>
         </div>

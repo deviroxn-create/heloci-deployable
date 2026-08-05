@@ -1,7 +1,7 @@
 import jsonLogic from "json-logic-js";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma/client";
-import { notificationService } from "@/lib/notifications/notification.service";
+import { publishDomainEvent } from "@/lib/events/domain-event-publisher";
 import { loadApplicantProfile } from "@/services/applicant-profile.service";
 
 const prismaClient = prisma as unknown as {
@@ -35,6 +35,8 @@ export interface RuleEvaluationResult {
 type ProgramWithEligibilityRules = Prisma.ProgramGetPayload<{ include: { eligibilityRules: true } }>;
 type EligibilityRuleVersion = { version: number; isActive: boolean; rules: unknown };
 
+const UNSURE_VALUES = new Set(["not_sure", "other", "prefer_not_to_say", "unknown", "unsure"]);
+
 function describePath(path: unknown): string {
   if (typeof path === "string") {
     return path
@@ -44,6 +46,44 @@ function describePath(path: unknown): string {
       .join(" ");
   }
   return "Field";
+}
+
+function isUncertainValue(value: unknown): boolean {
+  if (typeof value === "string") {
+    return UNSURE_VALUES.has(value.trim().toLowerCase());
+  }
+  return false;
+}
+
+function normalizeUnknownValue(value: unknown): unknown {
+  if (isUncertainValue(value)) return undefined;
+  return value;
+}
+
+function getRuleContextValue(source: Record<string, unknown>, path: string) {
+  return path.split(".").reduce<unknown>((current, segment) => {
+    if (current && typeof current === "object" && segment in current) {
+      return (current as Record<string, unknown>)[segment];
+    }
+    return undefined;
+  }, source);
+}
+
+function containsUncertainValue(node: unknown, context: Record<string, unknown>): boolean {
+  if (!node || typeof node !== "object") {
+    return false;
+  }
+
+  if (Array.isArray(node)) {
+    return node.some((child) => containsUncertainValue(child, context));
+  }
+
+  if (Object.prototype.hasOwnProperty.call(node, "var")) {
+    const path = String((node as Record<string, unknown>).var);
+    return isUncertainValue(getRuleContextValue(context, path));
+  }
+
+  return Object.values(node as Record<string, unknown>).some((value) => containsUncertainValue(value, context));
 }
 
 function formatValue(value: unknown): string {
@@ -115,13 +155,33 @@ function buildRuleContext(profile: Record<string, unknown>): Record<string, unkn
       ? employment.status
       : undefined;
 
+  // Normalize housing goals - convert comma-separated string to array
+  let housingGoals: string[] = [];
+  if (typeof preferences.housingGoal === "string") {
+    housingGoals = preferences.housingGoal.split(",").map((g) => g.trim()).filter(Boolean);
+  } else if (Array.isArray(preferences.housingGoal)) {
+    housingGoals = preferences.housingGoal.map(String).filter(Boolean);
+  }
+
+  // Normalize preferred locations
+  let preferredLocations: string[] = [];
+  if (Array.isArray(preferences.preferredLocations)) {
+    preferredLocations = preferences.preferredLocations.map(String).filter(Boolean);
+  } else if (typeof preferences.preferredLocations === "string") {
+    preferredLocations = preferences.preferredLocations.split(",").map((loc) => loc.trim()).filter(Boolean);
+  }
+
   return {
     personal: {
       ...personal,
-      age: personal.dateOfBirth ? new Date().getFullYear() - new Date(String(personal.dateOfBirth)).getFullYear() : undefined
+      age: personal.dateOfBirth ? new Date().getFullYear() - new Date(String(personal.dateOfBirth)).getFullYear() : undefined,
+      isVeteran: personal.isVeteran === true || personal.isVeteran === "true",
+      isDisabilityAffected: personal.isDisabilityAffected === true || personal.isDisabilityAffected === "true",
+      isPublicWorker: personal.isPublicWorker === true || personal.isPublicWorker === "true"
     },
     income: {
       monthly: typeof income.monthly === "number" ? income.monthly : typeof income.monthlyIncome === "number" ? income.monthlyIncome : undefined,
+      incomeRange: typeof income.incomeRange === "string" ? income.incomeRange : undefined,
       employmentStatus,
       employer: income.employer,
       workHours: income.workHours,
@@ -130,8 +190,21 @@ function buildRuleContext(profile: Record<string, unknown>): Record<string, unkn
     employment: {
       status: employmentStatus
     },
-    household,
-    preferences,
+    household: {
+      ...household,
+      householdSize: typeof household.householdSize === "number" ? household.householdSize : undefined
+    },
+    preferences: {
+      ...preferences,
+      housingGoals,
+      housingGoal: housingGoals.length > 0 ? housingGoals[0] : undefined,
+      preferredLocations,
+      bedrooms: typeof preferences.bedrooms === "number" ? preferences.bedrooms : undefined,
+      maxRent: typeof preferences.maxRent === "number" ? preferences.maxRent : undefined
+    },
+    housing: {
+      currentHousingSituation: (profile.housing as Record<string, unknown> | undefined)?.currentHousingSituation
+    },
     meta: profile.meta ?? {}
   };
 }
@@ -169,6 +242,15 @@ export function evaluateEligibilityRule(rule: unknown, profile: Record<string, u
       };
     }
 
+    if (containsUncertainValue(node, ruleContext)) {
+      return {
+        isEligible: true,
+        matched: [],
+        failed: [],
+        needsReview: true
+      };
+    }
+
     const entries = Object.entries(node as Record<string, unknown>);
     const [operator, operand] = entries[0] ?? [];
 
@@ -201,14 +283,19 @@ export function evaluateEligibilityRule(rule: unknown, profile: Record<string, u
       };
     }
 
-    const result = jsonLogic.apply(node, ruleContext);
+    const normalizedRuleContext = Object.fromEntries(
+      Object.entries(ruleContext).map(([key, value]) => [key, value])
+    ) as Record<string, unknown>;
+
+    const result = jsonLogic.apply(node, normalizedRuleContext);
     const descriptions = describeRuleNode(node, profile);
+    const isMatch = Boolean(result);
     return {
-      isEligible: Boolean(result),
+      isEligible: isMatch,
       score: undefined,
-      matched: Boolean(result) ? descriptions : [],
-      failed: Boolean(result) ? [] : descriptions,
-      needsReview: false
+      matched: isMatch ? descriptions : [],
+      failed: isMatch ? [] : descriptions,
+      needsReview: isMatch ? false : descriptions.length > 0
     };
   };
 
@@ -227,6 +314,13 @@ export async function runEligibilityEngine(userId: string): Promise<EligibilityE
   const profile = await loadApplicantProfile(userId);
   const ruleContext = buildRuleContext(profile as Record<string, unknown>);
 
+  const isDevelopment = process.env.NODE_ENV === "development" || process.env.DEBUG_ELIGIBILITY === "true";
+
+  if (isDevelopment) {
+    console.log("\n🔍 [Eligibility Engine] Running for user:", userId);
+    console.log("📋 [Profile Context]:", JSON.stringify(ruleContext, null, 2));
+  }
+
   const orgContext = process.env.DEFAULT_ORGANIZATION_ID ?? "default-org";
   const programs = (await prismaClient.program.findMany({
     where: {
@@ -241,11 +335,40 @@ export async function runEligibilityEngine(userId: string): Promise<EligibilityE
     }
   })) as ProgramWithEligibilityRules[];
 
+  if (isDevelopment) {
+    console.log(`\n📦 [Programs Found]: ${programs.length} active programs`);
+    programs.forEach((p) => {
+      console.log(`  - ${p.name} (${p.slug}) - ${p.eligibilityRules?.length ?? 0} active rules`);
+    });
+  }
+
+  if (programs.length === 0) {
+    console.warn("⚠️  [Eligibility Engine] No active programs found in organization:", orgContext);
+    console.warn("   Check that programs exist with status='active' and organizationId matches DEFAULT_ORGANIZATION_ID");
+    return [];
+  }
+
   const results = await Promise.all(
     programs.map(async (program: ProgramWithEligibilityRules) => {
       const activeRule = resolveActiveRule(program.eligibilityRules as EligibilityRuleVersion[]);
       const rule = activeRule?.rules as unknown;
+      
+      if (isDevelopment) {
+        console.log(`\n🎯 [Evaluating] ${program.name}`);
+        console.log(`   Active Rule: ${activeRule ? `v${activeRule.version}` : "none"}`);
+        if (activeRule && rule) {
+          console.log(`   Rule:`, JSON.stringify(rule, null, 2));
+        }
+      }
+
       const evaluation = rule ? evaluateEligibilityRule(rule, ruleContext) : { isEligible: false, matched: [], failed: ["No active eligibility rules configured."], needsReview: false };
+
+      if (isDevelopment) {
+        console.log(`   Result: ${evaluation.isEligible ? "✅ ELIGIBLE" : "❌ NOT ELIGIBLE"}`);
+        console.log(`   Score: ${evaluation.score ?? "N/A"}`);
+        console.log(`   Matched: ${evaluation.matched.join(", ") || "none"}`);
+        console.log(`   Failed: ${evaluation.failed.join(", ") || "none"}`);
+      }
 
       const explanation: EligibilityExplanation = {
         programId: program.id,
@@ -273,7 +396,8 @@ export async function runEligibilityEngine(userId: string): Promise<EligibilityE
             failed: explanation.failed,
             score_breakdown: explanation.score ? [explanation.score] : []
           },
-          ruleVersion: activeRule?.version ?? 1
+          ruleVersion: activeRule?.version ?? 1,
+          needsReview: explanation.needsReview
         },
         create: {
           userId,
@@ -285,7 +409,8 @@ export async function runEligibilityEngine(userId: string): Promise<EligibilityE
             failed: explanation.failed,
             score_breakdown: explanation.score ? [explanation.score] : []
           },
-          ruleVersion: activeRule?.version ?? 1
+          ruleVersion: activeRule?.version ?? 1,
+          needsReview: explanation.needsReview
         }
       });
 
@@ -293,10 +418,16 @@ export async function runEligibilityEngine(userId: string): Promise<EligibilityE
     })
   );
 
-  await notificationService.notify("eligibility_assessment_completed", {
+  const eligibleCount = results.filter((item: EligibilityExplanation) => item.isEligible).length;
+
+  if (isDevelopment) {
+    console.log(`\n✨ [Final Results]: ${eligibleCount} eligible / ${results.length} total programs`);
+  }
+
+  publishDomainEvent("eligibility.assessed", {
     userId,
-    matchCount: results.filter((item: EligibilityExplanation) => item.isEligible).length,
-    topProgram: results.find((item: EligibilityExplanation) => item.isEligible)?.programName
+    matchCount: eligibleCount,
+    topProgram: results.find((item: EligibilityExplanation) => item.isEligible)?.programName,
   });
 
   return results.sort((left: EligibilityExplanation, right: EligibilityExplanation) => Number(right.isEligible) - Number(left.isEligible) || Number(right.score ?? 0) - Number(left.score ?? 0));

@@ -56,8 +56,8 @@ interface ProgramWithFormData {
   }>;
 }
 
-export async function getFormForProgram(programSlug: string, userId: string) {
-  const program = (await prisma.program.findFirst({
+export async function getFormForProgram(programSlug: string, userId: string, options?: { createDraft?: boolean }) {
+  let program = (await prisma.program.findFirst({
     where: { slug: programSlug },
     include: {
       questionSets: {
@@ -80,6 +80,34 @@ export async function getFormForProgram(programSlug: string, userId: string) {
   })) as ProgramWithFormData | null;
 
   if (!program?.questionSets?.[0]) {
+    const fallbackProgram = await prisma.program.findUnique({
+      where: { slug: "global-eligibility" },
+      include: {
+        questionSets: {
+          where: { isActive: true },
+          orderBy: { version: "desc" },
+          take: 1,
+          include: {
+            pages: {
+              orderBy: { sortOrder: "asc" },
+              include: {
+                questions: {
+                  orderBy: { order: "asc" },
+                  include: { conditions: true }
+                }
+              }
+            }
+          }
+        }
+      }
+    }) as ProgramWithFormData | null;
+
+    if (fallbackProgram?.questionSets?.[0]) {
+      program = fallbackProgram;
+    }
+  }
+
+  if (!program?.questionSets?.[0]) {
     return { pages: [], applicationId: "", currentPage: 0, totalPages: 0, programName: program?.name ?? "" };
   }
 
@@ -88,16 +116,29 @@ export async function getFormForProgram(programSlug: string, userId: string) {
     where: { userId, programId: program.id, status: "draft" }
   });
 
-  if (!application) {
-    application = await prisma.programApplication.create({
-      data: {
-        userId,
-        programId: program.id,
-        status: "draft",
-        data: {},
-        currentPage: 0
+  // Optionally create a draft application when explicitly requested. Default: do not create.
+  if (!application && options?.createDraft) {
+    try {
+      application = await prisma.programApplication.create({
+        data: {
+          userId,
+          programId: program.id,
+          status: "draft",
+          data: {},
+          currentPage: 0
+        }
+      });
+    } catch (err: any) {
+      // If unique constraint fails, an application already exists
+      // Try to fetch it (it should exist now)
+      if (err.code === 'P2002') {
+        application = await prisma.programApplication.findFirst({
+          where: { userId, programId: program.id }
+        });
+      } else {
+        throw err;
       }
-    });
+    }
   }
 
   const activeQuestionSet = program.questionSets[0];
@@ -120,11 +161,13 @@ export async function getFormForProgram(programSlug: string, userId: string) {
             ? (application?.data as Record<string, unknown>)[question.key]
             : undefined;
 
+        const normalizedType = typeof question.type === "string" ? question.type.toLowerCase() : "text";
+
         return {
           id: question.id,
           key: question.key,
           label: question.label,
-          type: question.type,
+          type: normalizedType,
           required: question.required,
           value: prefilledValue,
           visible,
@@ -145,8 +188,8 @@ export async function getFormForProgram(programSlug: string, userId: string) {
 
   return {
     pages,
-    applicationId: application.id,
-    currentPage: application.currentPage ?? 0,
+    applicationId: application?.id ?? "",
+    currentPage: application?.currentPage ?? 0,
     totalPages: pages.length,
     programName: program.name
   };

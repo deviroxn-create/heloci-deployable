@@ -1,11 +1,10 @@
 import { prisma } from "@/lib/prisma/client";
-import { requireOrgRole } from "@/lib/auth/rbac";
-import { notificationService } from "@/lib/notifications/notification.service";
+import { publishDomainEvent } from "@/lib/events/domain-event-publisher";
 import { randomBytes } from "crypto";
 import { queueTelegramAlert } from "@/lib/telegram/alert-service";
 
 export async function inviteStaff(orgId: string, inviterId: string, email: string, role: string) {
-  await requireOrgRole(inviterId, orgId, ["org_admin"]);
+  // Authorization should be enforced at API / server-action layer.
 
   const token = randomBytes(16).toString("hex");
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
@@ -14,7 +13,7 @@ export async function inviteStaff(orgId: string, inviterId: string, email: strin
 
   await prisma.auditLog.create({ data: { userId: inviterId, entity: "Invitation", action: "invited_staff", meta: { invitationId: invitation.id, email } } });
 
-  await notificationService.notify("staff_invited", { email, invitationId: invitation.id, token, organizationId: orgId });
+  publishDomainEvent("staff.invited", { email, invitationId: invitation.id, token, organizationId: orgId });
 
   return invitation;
 }
@@ -35,13 +34,13 @@ export async function acceptInvitation(token: string, userId: string) {
 
   await prisma.auditLog.create({ data: { userId, entity: "Invitation", action: "accepted", meta: { invitationId: invite.id } } });
 
-  await notificationService.notify("staff_invitation_accepted", { userId, organizationId: invite.organizationId });
+  publishDomainEvent("staff.invitation.accepted", { userId, organizationId: invite.organizationId });
 
   return member;
 }
 
 export async function updateMemberRole(orgId: string, adminId: string, memberUserId: string, newRole: string) {
-  await requireOrgRole(adminId, orgId, ["org_admin"]);
+  // Authorization should be enforced at API / server-action layer.
 
   if (adminId === memberUserId) throw new Error("cannot_change_own_role");
 
@@ -52,7 +51,7 @@ export async function updateMemberRole(orgId: string, adminId: string, memberUse
 
   await prisma.auditLog.create({ data: { userId: adminId, entity: "OrganizationMember", action: "role_updated", meta: { memberId: member.id, newRole } } });
 
-  await notificationService.notify("staff_role_changed", { userId: memberUserId, organizationId: orgId, newRole });
+  publishDomainEvent("staff.role.changed", { userId: memberUserId, organizationId: orgId, newRole });
 
   try {
     await queueTelegramAlert({ type: 'user_role_changed', level: 'WARN', organizationId: orgId, data: { name: updated.userId ?? memberUserId, from: member.role, to: newRole, actorName: adminId } });
@@ -64,7 +63,7 @@ export async function updateMemberRole(orgId: string, adminId: string, memberUse
 }
 
 export async function removeMember(orgId: string, adminId: string, memberUserId: string) {
-  await requireOrgRole(adminId, orgId, ["org_admin"]);
+  // Authorization should be enforced at API / server-action layer.
 
   if (adminId === memberUserId) throw new Error("cannot_remove_self");
 
@@ -81,7 +80,7 @@ export async function removeMember(orgId: string, adminId: string, memberUserId:
 
   await prisma.auditLog.create({ data: { userId: adminId, entity: "OrganizationMember", action: "removed", meta: { memberId: member.id } } });
 
-  await notificationService.notify("staff_removed", { userId: memberUserId, organizationId: orgId });
+  publishDomainEvent("staff.removed", { userId: memberUserId, organizationId: orgId });
 
   return true;
 }

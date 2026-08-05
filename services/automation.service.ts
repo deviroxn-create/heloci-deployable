@@ -1,9 +1,10 @@
-import { notificationService } from "@/lib/notifications/notification.service";
+import { publishDomainEvent } from "@/lib/events/domain-event-publisher";
 
 export async function triggerApplicationWorkflow(email: string, name: string) {
-  return notificationService.notify("application_submitted", {
+  publishDomainEvent("application.submitted", {
     name,
-    recipientEmail: email,
-    userEmail: email
+    email,
   });
+
+  return { success: true };
 }

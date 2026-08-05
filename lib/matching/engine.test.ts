@@ -143,6 +143,28 @@ test("generates recommendations when profile fields are missing", async () => {
   assert.ok(recommendation?.missingFields && Array.isArray(recommendation.missingFields));
 });
 
+test("creates a fallback recommendation when a result has no detailed failures", async () => {
+  const user = await createUserWithProfile();
+  const program = await createProgram({ name: "Fallback Match", slug: "fallback-match", housingGoal: "Support", organizationId: "org-1" });
+
+  await prisma.eligibilityResult.create({
+    data: {
+      userId: user.id,
+      programId: program.id,
+      isEligible: false,
+      score: 62,
+      reason: { matched: [], failed: [] },
+      ruleVersion: 1,
+      needsReview: false
+    }
+  });
+
+  const matches = await getProgramMatches(user.id);
+
+  assert.equal(matches.recommendedActions.length > 0, true);
+  assert.equal(matches.recommendedActions[0].programs.includes(program.name), true);
+});
+
 test("surfaces manual review flags", async () => {
   const user = await createUserWithProfile();
   const program = await createProgram({ name: "Manual Review", slug: "manual-review", housingGoal: "Support", organizationId: "org-1" });

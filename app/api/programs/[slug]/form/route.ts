@@ -8,7 +8,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }
 
+  if (user.role !== "APPLICANT") {
+    return NextResponse.json({ error: "Only applicants can access application forms." }, { status: 403 });
+  }
+
   const { slug } = await params;
-  const form = await getFormForProgram(slug, user.id);
+  // honor optional query param to create a draft when explicitly requested by the UI
+  const url = new URL(_req.url);
+  const createDraft = url.searchParams.get("createDraft") === "true";
+
+  const form = await getFormForProgram(slug, user.id, { createDraft });
   return NextResponse.json(form);
 }

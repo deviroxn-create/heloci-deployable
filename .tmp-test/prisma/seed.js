@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const client_1 = require("@prisma/client");
+const { Organization } = require("openai/resources/admin/organization/organization.js");
 const prisma = new client_1.PrismaClient();
 // ─── Dev credentials ──────────────────────────────────────────────────────────
 const USERS = [
@@ -9,7 +10,7 @@ const USERS = [
         password: process.env.DEFAULT_ADMIN_PASSWORD ?? "Admin1234!",
         name: "Heloci Admin",
         role: "ADMIN",
-        label: "admin"
+        label: "admin",
     },
     {
         email: "staff@heloci.ngo",

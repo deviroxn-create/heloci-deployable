@@ -1,7 +1,7 @@
 import jsonLogic from "json-logic-js";
 import { prisma } from "@/lib/prisma/client";
-import { notificationService } from "@/lib/notifications/notification.service";
-import { requireOrgRole } from "@/lib/auth/rbac";
+import { publishDomainEvent } from "@/lib/events/domain-event-publisher";
+import { getAllDomainEvents } from "@/lib/communications/communication-registry";
 import { addApplicationToWaitlist } from "@/lib/workflows/waitlist-service";
 
 export type WorkflowTriggerAction =
@@ -46,7 +46,7 @@ export async function createWorkflowTrigger(programId: string, staffUserId: stri
     throw new Error("program_not_found");
   }
 
-  await requireOrgRole(staffUserId, program.organizationId, ["org_admin"]);
+  // Authorization must be enforced at API / server-action layer; service validates ownership only.
 
   const trigger = await prisma.workflowTrigger.create({
     data: {
@@ -127,12 +127,38 @@ async function executeWorkflowAction(trigger: { id: string; action: WorkflowTrig
   const auditActorId = actorId ?? application?.program?.createdBy ?? application?.userId ?? program?.createdBy;
 
   if (trigger.action === "notify_applicant") {
-    const eventName = (trigger.actionConfig?.notificationEvent as string) ?? "admin_action";
-    await notificationService.notify(eventName as any, {
+    // PHASE B.6 CANONICALIZATION FIX:
+    // Previously accepted arbitrary event names from trigger config with blind transformation:
+    //   eventName.replace(/_/g, ".")
+    // This allowed ANY event name to be published, bypassing registry validation.
+    //
+    // Now we validate against the registry. Only predefined domain events can be published.
+    // If a trigger needs a new event, it must be added to the registry first.
+    
+    const defaultEventName = "admin.action"; // Safe default
+    let eventName = (trigger.actionConfig?.notificationEvent as string) ?? defaultEventName;
+    
+    // Normalize underscores to dots if needed (support legacy config format)
+    const normalizedEventName = eventName.replace(/_/g, ".");
+    
+    // Validate against registry - only allow registered domain events
+    const validDomainEvents = getAllDomainEvents();
+    if (!validDomainEvents.includes(normalizedEventName)) {
+      console.warn(
+        `[WorkflowEngine] Trigger ${trigger.id} references unregistered domain event: ${normalizedEventName}. ` +
+        `Falling back to default: ${defaultEventName}. ` +
+        `To use this event, add it to Communication Registry first.`
+      );
+      eventName = defaultEventName;
+    } else {
+      eventName = normalizedEventName;
+    }
+
+    publishDomainEvent(eventName, {
       ...payload,
       recipientEmail: application?.user?.email as string | undefined,
       programName: application?.program?.name ?? program?.name,
-      locale: "en"
+      locale: "en",
     });
   }
 
@@ -154,13 +180,13 @@ async function executeWorkflowAction(trigger: { id: string; action: WorkflowTrig
         )
       );
 
-      await notificationService.notify("documents_requested", {
+      publishDomainEvent("documents.requested", {
         ...payload,
         applicationId,
         programName: application?.program?.name,
         recipientEmail: application?.user?.email as string | undefined,
         locale: "en",
-        requestedDocs: documentTypes
+        requestedDocs: documentTypes,
       });
       }
   }
@@ -169,13 +195,13 @@ async function executeWorkflowAction(trigger: { id: string; action: WorkflowTrig
     const assignedToUserId = trigger.actionConfig?.assignedToUserId as string | undefined;
     if (assignedToUserId) {
       await prisma.programApplication.update({ where: { id: applicationId }, data: { assignedToId: assignedToUserId } });
-      await notificationService.notify("admin_action", {
+      publishDomainEvent("admin.action", {
         ...payload,
         userId: assignedToUserId,
         recipientEmail: payload.recipientEmail as string | undefined,
         locale: "en",
         applicationId,
-        programName: application?.program?.name
+        programName: application?.program?.name,
       });
     }
   }
@@ -186,25 +212,25 @@ async function executeWorkflowAction(trigger: { id: string; action: WorkflowTrig
 
   if (trigger.action === "auto_reject" && applicationId) {
     await prisma.programApplication.update({ where: { id: applicationId }, data: { status: "rejected", decision: "rejected", decisionReason: trigger.actionConfig?.reason as string ?? "Auto rejected by rule" } });
-    await notificationService.notify("application_rejected", {
+    publishDomainEvent("application.rejected", {
       ...payload,
       applicationId,
       programName: application?.program?.name,
       recipientEmail: application?.user?.email as string | undefined,
       locale: "en",
-      reason: trigger.actionConfig?.reason
+      reason: trigger.actionConfig?.reason,
     });
   }
 
   if (trigger.action === "auto_approve" && applicationId) {
     await prisma.programApplication.update({ where: { id: applicationId }, data: { status: "approved", decision: "approved", decisionReason: trigger.actionConfig?.reason as string ?? "Auto approved by rule" } });
-    await notificationService.notify("application_approved", {
+    publishDomainEvent("application.approved", {
       ...payload,
       applicationId,
       programName: application?.program?.name,
       recipientEmail: application?.user?.email as string | undefined,
       locale: "en",
-      reason: trigger.actionConfig?.reason
+      reason: trigger.actionConfig?.reason,
     });
   }
 

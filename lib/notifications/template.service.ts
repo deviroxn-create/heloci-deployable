@@ -1,6 +1,14 @@
-import Handlebars from "handlebars";
 import { prisma } from "@/lib/prisma/client";
 import type { NotificationChannel, NotificationEventName, NotificationPayload } from "./notification.service";
+
+function getTemplateValue(payload: NotificationPayload, key: string): unknown {
+  return key.split(".").reduce<unknown>((current, segment) => {
+    if (current && typeof current === "object" && segment in current) {
+      return (current as Record<string, unknown>)[segment];
+    }
+    return undefined;
+  }, payload as Record<string, unknown>);
+}
 
 export type NotificationTemplateDraft = {
   title: string;
@@ -17,11 +25,18 @@ export const defaultTemplates: Record<NotificationEventName, NotificationTemplat
   new_recommendation_available: { title: "Complete your profile", subject: "Complete your profile", body: "Add {{missingFields}} to qualify for {{programCount}} more programs." },
   application_started: { title: "Application started", subject: "Application started", body: "Application started for {{name}}." },
   application_submitted: { title: "Application submitted", subject: "Application submitted", body: "Application submitted by {{name}}." },
+  application_conditional: { title: "Conditional approval", subject: "Your application received conditional approval", body: "Your application was conditionally approved, {{name}}. Please provide additional information or documents as requested." },
+  application_withdrawn: { title: "Application withdrawn", subject: "Your application was withdrawn", body: "Your application was withdrawn, {{name}}. You can reapply at any time." },
   document_uploaded: { title: "Document uploaded", subject: "Document uploaded", body: "A new document was uploaded for {{name}}." },
   application_approved: { title: "Application approved", subject: "Application approved", body: "Your application was approved, {{name}}." },
   application_rejected: { title: "Application update", subject: "Application update", body: "Your application was updated, {{name}}." },
   application_waitlisted: { title: "Waitlist notification", subject: "Application waitlisted", body: "Your application has been waitlisted, {{name}}. We will notify you if a spot opens up." },
+  application_under_review: { title: "Application under review", subject: "Application under review", body: "Your application is now under review, {{name}}." },
   documents_requested: { title: "Documents requested", subject: "Additional documents needed", body: "Please provide the requested documents to continue your application, {{name}}." },
+  document_approved: { title: "Document approved", subject: "Document approved", body: "Your {{documentType}} ({{fileName}}) has been approved, {{name}}." },
+  message_created: { title: "New message", subject: "You have a new message", body: "A new message was created for {{name}}." },
+  document_rejected: { title: "Document rejected", subject: "Document requires revision", body: "Your {{documentType}} ({{fileName}}) was rejected: {{rejectionReason}}. Please upload a corrected version." },
+  document_replacement_requested: { title: "Document replacement requested", subject: "Document replacement needed", body: "Please replace your {{documentType}} ({{fileName}}). Reason: {{reason}}. Deadline: {{deadline}}. {{instructions}}" },
   rent_to_own_request: { title: "Rent-to-own request", subject: "Rent-to-own request", body: "A rent-to-own request was submitted by {{name}}." },
   government_program_application: { title: "Government program application", subject: "Government program application", body: "A government program application was submitted by {{name}}." },
   ngo_program_application: { title: "NGO program application", subject: "NGO program application", body: "An NGO program application was submitted by {{name}}." },
@@ -36,7 +51,8 @@ export const defaultTemplates: Record<NotificationEventName, NotificationTemplat
   staff_role_changed: { title: "Role changed", subject: "Your role changed", body: "Your organization role was changed to {{newRole}}." },
   staff_removed: { title: "Staff removed", subject: "Staff removed", body: "A staff member was removed from the organization." },
   system_error: { title: "System error", subject: "System error", body: "A system error was reported for {{name}}." },
-  admin_test: { title: "Notification test", subject: "Notification test", body: "This is a test notification for {{name}}." }
+  admin_test: { title: "Notification test", subject: "Notification test", body: "This is a test notification for {{name}}." },
+  custom_email: { title: "Custom email", subject: "Message from organization", body: "{{content}}" }
 };
 
 export function extractTemplateVariables(template: string) {
@@ -46,15 +62,10 @@ export function extractTemplateVariables(template: string) {
 }
 
 export function renderTemplate(template: string, payload: NotificationPayload) {
-  try {
-    const compiled = Handlebars.compile(template, { noEscape: true });
-    return compiled(payload);
-  } catch {
-    return template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => {
-      const value = payload[key as keyof NotificationPayload];
-      return value == null ? "" : String(value);
-    });
-  }
+  return template.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_match, key: string) => {
+    const value = getTemplateValue(payload, key);
+    return value == null ? "" : String(value);
+  });
 }
 
 export function renderTemplatePreview(template: string, payload: NotificationPayload) {
@@ -124,6 +135,63 @@ export async function getPublishedTemplate(eventName: NotificationEventName, cha
     html: buildTemplateHtml(fallback.body),
     plainText: buildTemplatePlainText(fallback.body),
     variables: extractTemplateVariables(fallback.body),
+    status: "PUBLISHED" as const,
+    active: true,
+    version: 1,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  };
+}
+
+/**
+ * CRITICAL FIX: Fetch template by full templateKey (e.g., "admin.application-submitted.telegram")
+ * This ensures audience-specific templates are used (admin templates don't go to applicants)
+ * Used by runtime dispatch to get correct audience template
+ */
+export async function getPublishedTemplateByKey(templateKey: string, locale = "en") {
+  const template = await prisma.notificationTemplate.findFirst({
+    where: {
+      name: templateKey,
+      active: true,
+      status: "PUBLISHED"
+    },
+    orderBy: { version: "desc" }
+  });
+
+  if (template) {
+    return template;
+  }
+
+  // Fallback: parse templateKey to extract audience, event, and channel for legacy lookup
+  // Example: "admin.application-submitted.telegram" → audience=admin, event=application_submitted, channel=telegram
+  const parts = templateKey.split(".");
+  if (parts.length >= 3) {
+    const channel = parts[parts.length - 1];
+    const eventParts = parts.slice(1, -1).join(".");
+    const eventName = eventParts.replace(/-/g, "_") as NotificationEventName;
+
+    const fallbackTemplate = await getPublishedTemplate(eventName, channel as NotificationChannel, locale);
+    // If we had to fall back, at least return something, but this indicates missing configuration
+    if (process.env.NODE_ENV !== "production") {
+      console.warn(
+        `[TemplateService] Template not found by key "${templateKey}", falling back to event=${eventName} channel=${channel}`
+      );
+    }
+    return fallbackTemplate;
+  }
+
+  // Absolute fallback to user_registration email
+  return {
+    id: "emergency-fallback",
+    name: templateKey,
+    eventName: "user_registration" as NotificationEventName,
+    channel: "email" as NotificationChannel,
+    locale,
+    title: "Notification",
+    subject: "Notification from Heloci",
+    html: "<div>Notification from Heloci</div>",
+    plainText: "Notification from Heloci",
+    variables: [],
     status: "PUBLISHED" as const,
     active: true,
     version: 1,

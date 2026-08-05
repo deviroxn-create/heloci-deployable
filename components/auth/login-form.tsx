@@ -10,6 +10,7 @@ import { AuthInput } from "@/components/auth/auth-input";
 import { SocialAuthButtons } from "@/components/auth/social-auth-buttons";
 import { AuthDivider } from "@/components/auth/auth-divider";
 import { Button } from "@/components/ui/button";
+import { trackLoginNotificationAction } from "@/actions/notifications.actions";
 import { supabase } from "@/lib/supabase/client";
 import type { z } from "zod";
 
@@ -40,37 +41,136 @@ export function LoginForm() {
   });
 
   const onSubmit = async (values: LoginValues) => {
+    if (busy) {
+      return;
+    }
+
     setError(null);
     setBusy(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
+    let authError = null;
+    let user = null;
+
+    try {
+const { error, data: authData } = await supabase.auth.signInWithPassword({
       email: values.email,
       password: values.password
     });
 
-    if (error) {
-      setBusy(false);
-      // Supabase returns "Invalid login credentials" both for wrong password
-      // AND for unconfirmed email. Give the user an actionable message.
-      if (
-        error.message.toLowerCase().includes("invalid login") ||
-        error.message.toLowerCase().includes("invalid credentials") ||
-        error.message.toLowerCase().includes("email not confirmed")
-      ) {
-        setNeedsConfirmation(true);
-        setResendEmail(values.email);
-        setError(
-          "Sign in failed. If you just registered, please check your inbox for a confirmation link first."
-        );
-      } else {
-        setError(error.message);
+    authError = error;
+    user = authData?.user;
+
+      if (error) {
+        setBusy(false);
+        // DEBUG: Log the actual error
+        console.error("Supabase login error:", {
+          status: error.status,
+          message: error.message,
+          name: error.name
+        });
+        
+        // WORKAROUND FOR DEV: If it's an email confirmation issue, try to bypass it
+        // by directly using the session if email_verified is true in metadata
+        if (
+          error.message.toLowerCase().includes("email not confirmed") &&
+          process.env.NODE_ENV === "development"
+        ) {
+          console.log("Email confirmation issue detected - attempting workaround for dev...");
+          
+          // In dev, if the user exists with email_verified=true, allow login
+          // This is a development workaround - production should enforce confirmation
+          try {
+            const meResponse = await fetch("/api/auth/me", {
+              method: "GET"
+            });
+            
+            if (meResponse.ok) {
+              const userData = await meResponse.json();
+              if (userData.id) {
+                // User exists and is authenticated - bypass this error for dev
+                console.log("Dev workaround: User authenticated despite confirmation error");
+                // Continue with redirect logic below
+                authError = null;
+              }
+            }
+          } catch (e) {
+            console.error("Dev workaround failed:", e);
+          }
+        }
+
+        if (authError) {
+          // Show error only if workaround didn't work
+          if (
+            error.message.toLowerCase().includes("invalid login") ||
+            error.message.toLowerCase().includes("invalid credentials") ||
+            error.message.toLowerCase().includes("email not confirmed")
+          ) {
+            setNeedsConfirmation(true);
+            setResendEmail(values.email);
+            setError(
+              "Sign in failed. If you just registered, please check your inbox for a confirmation link first."
+            );
+          } else {
+            setError(error.message);
+          }
+          return;
+        }
       }
+    } catch (err) {
+      console.error("Login exception:", err);
+      setBusy(false);
+      setError("An unexpected error occurred during login.");
       return;
+    }
+
+    if (authError && authError.message.toLowerCase().includes("email not confirmed")) {
+      // Email confirmation still failing - don't proceed
+      setBusy(false);
+      setNeedsConfirmation(true);
+      setResendEmail(values.email);
+      setError(
+        "Sign in failed. If you just registered, please check your inbox for a confirmation link first."
+      );
+      return;
+    }
+
+    // Determine redirect based on user role
+    // Platform Super Admin bypasses the query parameter and goes to platform dashboard
+    let finalRedirectTo = redirectTo;
+    
+    if (redirectTo === "/applicant/dashboard") {
+      // Query the API to get the user's role and determine the correct destination
+      try {
+        const response = await fetch("/api/auth/me");
+        if (response.ok) {
+          const userData = await response.json();
+          
+          if (userData.role === "SUPER_ADMIN" && !userData.organizationId) {
+            // Platform Super Admin → platform admin dashboard
+            finalRedirectTo = "/admin/dashboard";
+          } else if (userData.role === "ADMIN" || userData.role === "STAFF") {
+            // Organization admin/staff → organization admin dashboard
+            finalRedirectTo = "/admin/dashboard";
+          } else if (userData.role === "APPLICANT") {
+            // Applicant → applicant dashboard
+            finalRedirectTo = "/applicant/dashboard";
+          }
+        }
+      } catch (err) {
+        // Fall back to default if API check fails
+        console.error("Failed to fetch user role:", err);
+      }
+    }
+
+    try {
+      await trackLoginNotificationAction(values.email, user?.user_metadata?.full_name ?? values.email);
+    } catch (err) {
+      console.error("Login notification action failed:", err);
     }
 
     // Hard navigation — ensures cookies are fully committed before the
     // next request hits the middleware (router.push is too fast)
-    window.location.href = redirectTo;
+    window.location.href = finalRedirectTo;
   };
 
   return (

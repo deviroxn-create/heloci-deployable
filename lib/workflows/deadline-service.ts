@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma/client";
-import { notificationService } from "@/lib/notifications/notification.service";
+import { publishDomainEvent } from "@/lib/events/domain-event-publisher";
 import { queueTelegramAlert } from "@/lib/telegram/alert-service";
 
 export async function processDocumentRequestReminders() {
@@ -39,14 +39,14 @@ export async function processDocumentRequestReminders() {
         }
       });
 
-      await notificationService.notify("documents_requested", {
+      publishDomainEvent("documents.requested", {
         userId: request.application.userId,
         applicationId: request.applicationId,
         programName: request.application.program.name,
         recipientEmail: request.application.user.email,
         locale: "en",
         documentType: request.documentType,
-        requestedDocs: [request.documentType]
+        requestedDocs: [request.documentType],
       });
 
       processed.push(request.id);
@@ -84,19 +84,12 @@ export async function processProgramDeadlineNotifications() {
         }
       });
 
-      await notificationService.notify("admin_action", {
+      publishDomainEvent("admin.action", {
         userId: program.createdBy,
-        recipientEmail: process.env.COMMUNICATION_SENDER_EMAIL || "support@heloci.ngo",
+        recipientEmail: "support@heloci.us",
         locale: "en",
         programName: program.name,
-        eventName: "deadline_reminder"
-      });
-
-      await notificationService.notify("ops_alert", {
-        userId: program.createdBy,
-        programName: program.name,
         eventName: "deadline_reminder",
-        locale: "en"
       });
 
       try {

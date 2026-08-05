@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
-import { prisma } from "@/lib/prisma/client";
 import { requireOrgRole } from "@/lib/auth/rbac";
-import { notificationService } from "@/lib/notifications/notification.service";
+import { publishDomainEvent } from "@/lib/events/domain-event-publisher";
+import { getProgramForAdmin } from "@/lib/programs/program.service";
+import { createEligibilityRule } from "@/lib/programs/rule-service";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
@@ -12,7 +13,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   const { id } = await params;
-  const program = await prisma.program.findUnique({ where: { id } });
+  const program = await getProgramForAdmin(id);
   if (!program) {
     return NextResponse.json({ error: "Program not found." }, { status: 404 });
   }
@@ -21,23 +22,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const body = await req.json();
 
-  await prisma.eligibilityRule.updateMany({
-    where: { programId: id, isActive: true },
-    data: { isActive: false }
+  const rule = await createEligibilityRule(id, user.id, {
+    version: body.version ?? 1,
+    name: body.name ?? "v1",
+    rules: body.rules ?? {},
   });
 
-  const rule = await prisma.eligibilityRule.create({
-    data: {
-      programId: id,
-      version: (body.version ?? 1) as number,
-      name: body.name ?? "v1",
-      rules: body.rules ?? {},
-      isActive: true,
-      createdBy: user.id
-    }
-  });
-
-  await notificationService.notify("admin_action", { userId: user.id, recipientEmail: user.email, locale: "en" });
+  publishDomainEvent("admin.action", { userId: user.id, recipientEmail: user.email, locale: "en" });
 
   return NextResponse.json(rule);
 }

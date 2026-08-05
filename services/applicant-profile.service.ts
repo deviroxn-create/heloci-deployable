@@ -28,7 +28,8 @@ export type ApplicantProfile = {
     employer?: string;
     workHours?: number;
     sourceOfIncome?: string[];
-  };
+    incomeRange?: string;
+  } | null;
   employment?: {
     status?: string;
   };
@@ -60,6 +61,7 @@ export type ApplicantProfile = {
     completedSections?: string[];
     lastUpdatedAt?: string;
     version?: number;
+    answers?: Record<string, unknown>;
   };
 };
 
@@ -131,7 +133,7 @@ export function normalizeApplicantProfile(input: Partial<ApplicantProfile> = {})
   return {
     personal: input.personal ?? {},
     household: input.household ?? {},
-    income: input.income ?? {},
+    income: input.income === null ? null : input.income ?? {},
     employment: input.employment ?? {},
     education: input.education ?? {},
     housing: input.housing ?? {},
@@ -143,7 +145,8 @@ export function normalizeApplicantProfile(input: Partial<ApplicantProfile> = {})
     meta: {
       completedSections: input.meta?.completedSections ?? [],
       lastUpdatedAt: input.meta?.lastUpdatedAt,
-      version: input.meta?.version ?? 1
+      version: input.meta?.version ?? 1,
+      answers: Object.fromEntries(Object.entries(input.meta?.answers ?? {}).filter(([, value]) => value !== undefined)) as Record<string, unknown>
     }
   };
 }
@@ -219,7 +222,8 @@ export function mapLegacyProfileData(input: LegacyProfilePayload = {}): Applican
     documents: Array.isArray(getValue(["documents"])) ? (getValue(["documents"]) as Array<Record<string, unknown>>) : [],
     meta: {
       lastUpdatedAt: coerceString(getValue(["updated_at", "updatedAt"])),
-      version: 1
+      version: 1,
+      answers: {}
     }
   });
 }
@@ -281,11 +285,19 @@ async function writeLegacyApplicantProfile(userId: string, payload: LegacyProfil
 
 async function persistApplicantProfile(userId: string, profile: ApplicantProfile, completeness: ApplicantProfileCompleteness) {
   try {
-    await prisma.$executeRaw`
-      INSERT INTO "ApplicantProfile" ("userId", "profileData", "completeness", "createdAt", "updatedAt")
-      VALUES (${userId}, ${JSON.stringify(profile)}::jsonb, ${JSON.stringify(completeness)}::jsonb, now(), now())
-      ON CONFLICT ("userId") DO UPDATE SET "profileData" = EXCLUDED."profileData", "completeness" = EXCLUDED."completeness", "updatedAt" = now()
-    `;
+    await prisma.applicantProfile.upsert({
+      where: { userId },
+      update: {
+        profileData: profile as unknown as Prisma.InputJsonValue,
+        completeness,
+        updatedAt: new Date()
+      },
+      create: {
+        userId,
+        profileData: profile as unknown as Prisma.InputJsonValue,
+        completeness
+      }
+    });
   } catch (error) {
     if (error instanceof Error && /relation .*ApplicantProfile|does not exist/i.test(error.message)) {
       return;
@@ -346,6 +358,10 @@ export async function migrateLegacyApplicantProfile(userId: string) {
 }
 
 export async function saveApplicantProfile(input: Partial<ApplicantProfile> & { userId: string }, options?: { skipNotification?: boolean; skipLegacyWrite?: boolean }) {
+  if (!input.userId) {
+    throw new Error("Missing userId for profile save.");
+  }
+
   const normalized = normalizeApplicantProfile(input);
   const completeness = calculateProfileCompleteness(normalized);
   const profile = {

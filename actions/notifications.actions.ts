@@ -1,6 +1,5 @@
 "use server";
 
-import { prisma } from "@/lib/prisma/client";
 import {
   cancelPendingNotification,
   getCommunicationTimeline,
@@ -8,7 +7,6 @@ import {
   getNotificationPreferences,
   getNotificationSettings,
   getNotificationTemplates,
-  notificationService,
   retryFailedNotifications,
   retryNotification,
   saveNotificationPreference,
@@ -17,6 +15,8 @@ import {
   type NotificationEventName,
   type NotificationSettings
 } from "@/lib/notifications/notification.service";
+import { publishDomainEvent } from "@/lib/events/domain-event-publisher";
+import { getUserNotificationProfile } from "@/lib/communications/message-template.service";
 
 export async function getNotificationSettingsAction() {
   return getNotificationSettings();
@@ -31,29 +31,31 @@ export async function sendTestNotificationAction(settings?: NotificationSettings
     await saveNotificationSettings(settings);
   }
 
-  return notificationService.notify("admin_test", {
+  publishDomainEvent("admin.action", {
     name: "Admin",
     userEmail: settings?.senderEmail || "support@heloci.ngo",
     recipientEmail: settings?.senderEmail || "support@heloci.ngo"
   });
+
+  return { success: true };
 }
 
 export async function emitNotificationAction(eventName: NotificationEventName, payload: Record<string, unknown> = {}) {
-  return notificationService.notify(eventName, payload as any);
+  publishDomainEvent(eventName.replace(/_/g, "."), payload as any);
+  return { success: true };
 }
 
 export async function trackLoginNotificationAction(email: string, name?: string) {
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true, name: true }
-  });
+  const user = await getUserNotificationProfile(email);
 
-  return notificationService.notify("user_login", {
+  publishDomainEvent("user.login", {
     userId: user?.id,
     userEmail: email,
     recipientEmail: email,
     name: user?.name || name || email
   });
+
+  return { success: true };
 }
 
 export async function getCommunicationDashboardDataAction() {

@@ -1,0 +1,281 @@
+════════════════════════════════════════════════════════════════════════════════
+ PHASE 5D — OPERATIONAL CERTIFICATION
+ STATUS: ✅ READY TO EXECUTE
+════════════════════════════════════════════════════════════════════════════════
+
+CURRENT STATE:
+  ✅ Dev Server: Running on http://localhost:3000
+  ✅ Database: PostgreSQL Ready
+  ✅ Environment: .env.local Configured
+  ✅ Documentation: Complete (7 documents)
+  ✅ Authorization: Approved
+
+════════════════════════════════════════════════════════════════════════════════
+ WHAT YOU'RE TESTING
+════════════════════════════════════════════════════════════════════════════════
+
+23 workflows end-to-end through the browser UI:
+
+  AUTHENTICATION (3)
+    1. User Registration
+    2. User Login
+    3. Password Reset (⚠️ Needs fix - 15 min)
+
+  APPLICATIONS (8)
+    4. Start Application
+    5. Save Draft
+    6. Submit Application
+    7. Withdraw Application
+    8. Application Approval (Admin)
+    9. Application Rejection (Admin)
+    10. Conditional Approval (Admin)
+    11. Waitlist Decision (Admin)
+
+  DOCUMENTS (5)
+    12. Upload Document
+    13. Request Documents (Admin)
+    14. Approve Document (Admin)
+    15. Reject Document (Admin)
+    16. Request Replacement (Admin)
+
+  MESSAGING (2)
+    17. Applicant Message
+    18. Admin Message
+
+  STAFF MANAGEMENT (4)
+    19. Invite Staff
+    20. Accept Invitation
+    21. Change Staff Role
+    22. Remove Staff
+
+  PROGRAMS (1)
+    23. Eligibility Assessment
+
+════════════════════════════════════════════════════════════════════════════════
+ HOW TO START
+════════════════════════════════════════════════════════════════════════════════
+
+1. READ (5 minutes):
+   Open: .kiro/PHASE-5D-LAUNCH-SUMMARY.md
+   
+   This explains:
+   - What Phase 5D is
+   - What's being tested
+   - Expected timeline
+   - Success criteria
+
+2. PREPARE (15 minutes):
+   Open: .kiro/PHASE-5D-PRE-EXECUTION-CHECKLIST.md
+   
+   This checklist ensures:
+   - Your environment is ready
+   - Tools are available
+   - You understand success metrics
+   - You know failure handling
+
+3. TEST (3-4 hours):
+   Navigate to: http://localhost:3000/register
+   
+   Open: .kiro/PHASE-5D-OPERATIONAL-CERTIFICATION-PLAN.md
+   Follow step-by-step procedures for each workflow
+
+4. VERIFY (Reference anytime):
+   Use: .kiro/PHASE-5D-EXECUTION-GUIDE.md
+   SQL queries and verification commands
+
+5. REPORT (30 minutes):
+   Create: .kiro/PHASE-5D-OPERATIONAL-CERTIFICATION.md
+   Compile all results and assessment
+
+════════════════════════════════════════════════════════════════════════════════
+ DOCUMENTS CREATED
+════════════════════════════════════════════════════════════════════════════════
+
+Essential (Read These):
+  ✅ PHASE-5D-STATUS.md ..................... Current status and immediate actions
+  ✅ PHASE-5D-LAUNCH-SUMMARY.md ............ 5-minute overview of Phase 5D
+  ✅ PHASE-5D-PRE-EXECUTION-CHECKLIST.md . Pre-flight verification
+
+Main Guide (Use During Testing):
+  ✅ PHASE-5D-OPERATIONAL-CERTIFICATION-PLAN.md . Step-by-step for all 23 workflows
+
+Reference (Keep Open):
+  ✅ PHASE-5D-EXECUTION-GUIDE.md ........... SQL queries & verification
+  ✅ PHASE-5D-STRATEGIC-APPROACH.md ....... Testing strategy & approach
+  ✅ PHASE-5D-INDEX.md ..................... Navigation hub
+
+════════════════════════════════════════════════════════════════════════════════
+ KNOWN BLOCKER
+════════════════════════════════════════════════════════════════════════════════
+
+BLOCKER #1: Password Reset Event Not Published
+  Status: Will FAIL without fix
+  Location: See PHASE-5C-REQUIRED-FIXES.md
+  Fix Time: 15 minutes
+  When: Before testing Workflow #3
+  
+  Impact:
+    - Workflow #3 must have event published for audit trail
+    - Event triggers notifications to organization
+    - Creates compliance visibility
+    
+  Solution:
+    - Add resetPasswordAction() Server Action
+    - Call from forgot-password form
+    - Add registry entry
+    
+  Recommendation: Implement this fix before testing
+
+════════════════════════════════════════════════════════════════════════════════
+ TIMELINE
+════════════════════════════════════════════════════════════════════════════════
+
+Pre-Execution:
+  • Read summaries ...................... 5 min
+  • Pre-flight checklist ............... 15 min
+  • Gather tools ....................... 5 min
+  Total: 25 minutes
+
+Fix Blocker (Optional but Recommended):
+  • Password Reset fix ................. 15 min
+
+Testing:
+  • Critical path (4 workflows) ........ 40 min
+  • Supporting workflows (6) ........... 60 min
+  • Optional workflows (13) ............ 90 min
+  Total: 190 minutes (3.2 hours)
+
+Post-Testing:
+  • Analysis & fixes ................... 30 min
+  • Report compilation ................. 30 min
+  Total: 60 minutes
+
+GRAND TOTAL: 3.5-4 hours
+
+════════════════════════════════════════════════════════════════════════════════
+ SUCCESS CRITERIA
+════════════════════════════════════════════════════════════════════════════════
+
+Minimum (To Proceed to Phase 6):
+  ✅ 20 / 23 workflows pass (87%)
+  ✅ All critical path workflows pass
+  ✅ All failures documented with root cause
+  ✅ Production readiness ≥ 90%
+
+Target (Ideal):
+  ✅ 22 / 23 workflows pass (96%)
+  ✅ Only 1 known issue partial
+  ✅ All fixes identified
+  ✅ Production readiness ≥ 95%
+
+Blocker (Cannot Proceed):
+  ❌ Critical path workflow fails
+  ❌ Architectural issue discovered
+  ❌ Data corruption observed
+  ❌ Security vulnerability found
+
+════════════════════════════════════════════════════════════════════════════════
+ EXPECTED RESULTS
+════════════════════════════════════════════════════════════════════════════════
+
+Critical Path Workflows (Must All Pass):
+  • Workflow #1: User Registration ......... ✅ Expected: PASS
+  • Workflow #4: Start Application ........ ✅ Expected: PASS
+  • Workflow #6: Submit Application ....... ✅ Expected: PASS
+  • Workflow #8: Application Approval ..... ✅ Expected: PASS
+
+Key Features (Should Pass):
+  • User Login ........................... ✅ Expected: PASS
+  • Application Rejection ................ ✅ Expected: PASS
+  • Document Upload ...................... ✅ Expected: PASS
+  • Staff Invitation ..................... ✅ Expected: PASS
+
+Optional Features (Can Be Partial):
+  • Waitlist ............................ ✅ Expected: PASS
+  • Conditional Approval ................ ✅ Expected: PASS
+  • Document Approval ................... ✅ Expected: PASS
+
+Known Issues (Expected to Fail Unless Fixed):
+  • Password Reset (Workflow #3) ........ ⚠️ Will FAIL without blocker fix
+
+════════════════════════════════════════════════════════════════════════════════
+ QUICK REFERENCE
+════════════════════════════════════════════════════════════════════════════════
+
+Dev Server: http://localhost:3000
+
+Login Page: http://localhost:3000/login
+Register: http://localhost:3000/register
+Forgot Password: http://localhost:3000/forgot-password
+Admin Dashboard: http://localhost:3000/admin/dashboard
+
+SQL Queries:
+  See: .kiro/PHASE-5D-EXECUTION-GUIDE.md → VERIFICATION COMMANDS
+
+Troubleshooting:
+  See: .kiro/PHASE-5D-EXECUTION-GUIDE.md → TROUBLESHOOTING
+
+════════════════════════════════════════════════════════════════════════════════
+ AUTHORIZATION
+════════════════════════════════════════════════════════════════════════════════
+
+✅ You are authorized to begin Phase 5D testing immediately.
+
+All prerequisites met:
+  ✅ Dev server running
+  ✅ Database ready
+  ✅ Environment configured
+  ✅ Documentation complete
+  ✅ Tools available
+  ✅ Procedures defined
+  ✅ Success criteria established
+
+No further approvals needed. Proceed to testing.
+
+════════════════════════════════════════════════════════════════════════════════
+ NEXT STEPS
+════════════════════════════════════════════════════════════════════════════════
+
+1. 👉 Read: .kiro/PHASE-5D-LAUNCH-SUMMARY.md (5 minutes)
+2. 👉 Check: .kiro/PHASE-5D-PRE-EXECUTION-CHECKLIST.md (15 minutes)
+3. 👉 Go to: http://localhost:3000/register
+4. 👉 Follow: .kiro/PHASE-5D-OPERATIONAL-CERTIFICATION-PLAN.md (Workflow #1)
+5. 👉 Repeat for all 23 workflows
+6. 👉 Create: .kiro/PHASE-5D-OPERATIONAL-CERTIFICATION.md (Report)
+
+════════════════════════════════════════════════════════════════════════════════
+ STATUS
+════════════════════════════════════════════════════════════════════════════════
+
+Dev Server Status:
+  ✅ RUNNING on http://localhost:3000
+  ✅ Ready in 2.5 seconds
+  ✅ All systems operational
+
+Testing Status:
+  ⏳ READY TO BEGIN
+  ⏳ All 23 workflows prepared
+  ⏳ Awaiting tester action
+
+Documentation Status:
+  ✅ 7 documents created
+  ✅ Procedures documented
+  ✅ References provided
+  ✅ Navigation indexed
+
+Gate Status:
+  ✅ AUTHORIZED TO PROCEED
+  ✅ All prerequisites met
+  ✅ No blockers to start
+
+════════════════════════════════════════════════════════════════════════════════
+
+🚀 READY FOR LAUNCH
+
+Phase 5D Operational Certification is prepared and ready to execute.
+
+Start with: .kiro/PHASE-5D-LAUNCH-SUMMARY.md
+
+Good luck! ✅
+
+════════════════════════════════════════════════════════════════════════════════

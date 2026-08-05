@@ -1,0 +1,219 @@
+================================================================================
+K1.C0 - COMMUNICATION CONTRACT FROZEN
+================================================================================
+
+IMMUTABLE COMMUNICATIONREQUEST OBJECT
+────────────────────────────────────────────────────────────────────────────
+
+┌─ IDENTITY & TRACING ─────────────────────────────────────────────────────┐
+│                                                                            │
+│  traceId              : string    (unique identifier for this flow)       │
+│  organizationId       : string    (org isolation boundary)                │
+│  userId?              : string    (audit trail - who triggered)           │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌─ EVENT CONTEXT (IMMUTABLE) ──────────────────────────────────────────────┐
+│                                                                            │
+│  event                : string    (domain event name)                     │
+│  eventPayload         : object    (business data - READ ONLY)             │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌─ AUDIENCES ──────────────────────────────────────────────────────────────┐
+│                                                                            │
+│  audiences[]          : AudienceRole[]  (resolved roles)                 │
+│                          - applicant, org_admin, case_worker, etc.       │
+│                                                                            │
+│  recipients[]         : Recipient[]     (people receiving this)           │
+│                          - id, email, name, role, preferences            │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌─ CHANNELS ───────────────────────────────────────────────────────────────┐
+│                                                                            │
+│  channels[]           : CommunicationChannel[]  (available channels)      │
+│                          - email, telegram, internal, whatsapp, sms      │
+│                                                                            │
+│  channelPlan[]        : ChannelPlan[]   (primary + fallbacks per user)    │
+│                          - recipientId, primary, fallbacks[], disabled[]  │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌─ TEMPLATE & RENDERING ───────────────────────────────────────────────────┐
+│                                                                            │
+│  template             : Template        (which template)                  │
+│                          - id, name, version, language, channel          │
+│                                                                            │
+│  rendered             : RenderedTemplate (final content)                  │
+│                          - subject?, body, html?, plainText?              │
+│                          - variables: {substituted, missing}              │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌─ METADATA ───────────────────────────────────────────────────────────────┐
+│                                                                            │
+│  metadata?            : CommunicationMetadata  (tracking data)            │
+│                          - source, priority, sendAt?, expiresAt?         │
+│                          - retryCount?, maxRetries?, customData?         │
+│                                                                            │
+│  createdAt            : Date       (when created)                         │
+│  createdBy?           : string     (component that created)               │
+│  tags?[]              : string[]   (for filtering/searching)              │
+│  correlationId?       : string     (link to related requests)             │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+
+IMMUTABILITY PROPERTIES
+────────────────────────────────────────────────────────────────────────────
+
+✅ All properties are readonly
+✅ Object is Object.freeze() after creation
+✅ All nested objects are frozen
+✅ All arrays are frozen (cannot push, splice, etc.)
+✅ Cannot modify eventPayload (read-only)
+✅ Enrichment creates NEW object (never modifies original)
+
+RUNTIME FLOW
+────────────────────────────────────────────────────────────────────────────
+
+Domain Event Published
+         ↓
+NotificationDomainSubscriber receives it (Phase B)
+         ↓ 
+NotificationService.notify(communicationEventName) (Phase B)
+         ↓
+RuntimeOrchestrator.run()  ← Entry to Phase C
+         ↓
+    ┌─────────────────────────────────────────────────────────┐
+    │  C.1: AudienceResolver                                 │
+    │  INPUT:  {event, eventPayload, organizationId}         │
+    │  OUTPUT: CommunicationRequest +                        │
+    │          {audiences, recipients}                       │
+    └─────────────────────────────────────────────────────────┘
+         ↓ (immutable enrichment)
+    ┌─────────────────────────────────────────────────────────┐
+    │  C.2: CommunicationPlanner                             │
+    │  INPUT:  CommunicationRequest (from C.1)               │
+    │  OUTPUT: CommunicationRequest +                        │
+    │          {channels, channelPlan}                       │
+    └─────────────────────────────────────────────────────────┘
+         ↓ (immutable enrichment)
+    ┌─────────────────────────────────────────────────────────┐
+    │  C.3: TemplateResolver                                 │
+    │  INPUT:  CommunicationRequest (from C.2)               │
+    │  OUTPUT: CommunicationRequest +                        │
+    │          {template, rendered}                          │
+    └─────────────────────────────────────────────────────────┘
+         ↓ (complete request)
+    ┌─────────────────────────────────────────────────────────┐
+    │  C.4: Dispatcher                                       │
+    │  INPUT:  CommunicationRequest (complete)               │
+    │  KNOWS:  recipient, channel, rendered content          │
+    │  DOESN'T KNOW: application, user, organization         │
+    │  OUTPUT: Delivery status                               │
+    └─────────────────────────────────────────────────────────┘
+         ↓
+Provider Adapters (email, telegram, internal, whatsapp)
+         ↓
+External APIs or Database
+         ↓
+NotificationLog (audit trail)
+
+VALIDATION
+────────────────────────────────────────────────────────────────────────────
+
+All requests MUST have:
+  ✅ traceId (unique)
+  ✅ organizationId (non-empty)
+  ✅ event (non-empty)
+  ✅ eventPayload (object or {})
+  ✅ At least 1 audiences entry
+  ✅ At least 1 recipients entry
+  ✅ At least 1 channels entry
+  ✅ At least 1 channelPlan entry
+  ✅ template (non-null)
+  ✅ rendered (non-null)
+  ✅ createdAt (Date)
+
+BUILDER PATTERN
+────────────────────────────────────────────────────────────────────────────
+
+const builder = new CommunicationRequestBuilder()
+  .withTraceId(uuid)
+  .withOrganizationId("org123")
+  .withEvent("user.registration")
+  .withEventPayload({userId: "user123"})
+  .withAudiences(["applicant"])
+  .withRecipients([...])
+  .withChannels(["email"])
+  .withChannelPlan([...])
+  .withTemplate({...})
+  .withRendered({...});
+
+const result = builder.build();  // Validates all fields
+if (result.success) {
+  const request = result.request;  // Immutable & frozen
+}
+
+ENRICHMENT PATTERN
+────────────────────────────────────────────────────────────────────────────
+
+// Layer 1: Create initial
+const request1 = builder.build().request;
+
+// Layer 2: Enrich (creates NEW object)
+const request2 = CommunicationRequestFactory.enrich(request1, {
+  audiences: ["applicant", "org_admin"],
+  recipients: [resolved1, resolved2]
+});
+
+// Original request1 unchanged
+// request2 is new frozen object
+// Both valid and immutable
+
+SERIALIZATION
+────────────────────────────────────────────────────────────────────────────
+
+// Save to database
+const serialized = CommunicationRequestSerializer.serialize(request);
+db.communications.insert(serialized);
+
+// Restore from database
+const restored = CommunicationRequestSerializer.deserialize(stored);
+// Automatically frozen and validated
+
+// JSON strings
+const json = CommunicationRequestSerializer.toJSON(request);
+const fromJson = CommunicationRequestSerializer.fromJSON(json);
+
+CONTRACT FILES
+────────────────────────────────────────────────────────────────────────────
+
+lib/communications/contracts/
+├── CommunicationTypes.ts           (core types)
+├── Recipient.ts                     (factories & validators)
+├── ChannelPlan.ts                   (factories & validators)
+├── RenderedTemplate.ts              (factories & validators)
+├── CommunicationRequest.ts          (builder, validator, factory)
+├── CommunicationRequestSerializer.ts (persistence)
+├── index.ts                         (exports)
+└── __tests__/
+    ├── CommunicationRequest.test.ts (36 tests)
+    └── Serializer.test.ts          (15 tests)
+
+STATUS
+────────────────────────────────────────────────────────────────────────────
+
+✅ Contract Frozen
+✅ All Builders Complete
+✅ All Validators Comprehensive
+✅ Serialization Reversible
+✅ Immutability Enforced (Object.freeze)
+✅ TypeScript Compiles Clean
+✅ Tests Comprehensive (51+ tests)
+✅ Ready for Phase C Implementation
+
+🔒 DO NOT MODIFY THIS CONTRACT WITHOUT ARCHITECTURAL REVIEW
+
+================================================================================

@@ -1,17 +1,16 @@
 import { prisma } from "@/lib/prisma/client";
 import { loadApplicantProfile } from "@/services/applicant-profile.service";
-import { notificationService } from "@/lib/notifications/notification.service";
+import { publishDomainEvent } from "@/lib/events/domain-event-publisher";
 import { queueTelegramAlert } from "@/lib/telegram/alert-service";
-import { requireOrgRole } from "@/lib/auth/rbac";
 
 export async function getApplicationsForReview(orgId: string, filters: {
-  staffUserId: string;
   status?: string[];
   assignedTo?: string;
   programId?: string;
   search?: string;
 }) {
-  await requireOrgRole(filters.staffUserId, orgId, ["org_admin", "reviewer", "viewer"]);
+  // Authorization is handled at API route level
+  // This service performs only business logic validation
 
   const where: any = {
     program: { organizationId: orgId }
@@ -22,7 +21,7 @@ export async function getApplicationsForReview(orgId: string, filters: {
   }
 
   if (filters.assignedTo) {
-    where.assignedToId = filters.assignedTo === "me" ? filters.staffUserId : filters.assignedTo;
+    where.assignedToId = filters.assignedTo;
   }
 
   if (filters.programId) {
@@ -63,7 +62,20 @@ export async function getApplicationsForReview(orgId: string, filters: {
   };
 }
 
-export async function getApplicationDetail(applicationId: string, staffUserId: string) {
+export async function getApplicationOrganizationId(applicationId: string) {
+  const application = await prisma.programApplication.findUnique({
+    where: { id: applicationId },
+    select: {
+      program: {
+        select: { organizationId: true }
+      }
+    }
+  });
+
+  return application?.program.organizationId ?? null;
+}
+
+export async function getApplicationDetail(applicationId: string) {
   const application = await prisma.programApplication.findUnique({
     where: { id: applicationId },
     include: {
@@ -80,7 +92,8 @@ export async function getApplicationDetail(applicationId: string, staffUserId: s
     throw new Error("Application not found");
   }
 
-  await requireOrgRole(staffUserId, application.program.organizationId, ["org_admin", "reviewer", "viewer"]);
+  // Authorization is handled at API route level
+  // This service performs only business logic validation (ownership via program.organizationId)
 
   const applicantProfile = await loadApplicantProfile(application.userId);
   const eligibilityResult = await prisma.eligibilityResult.findUnique({
@@ -98,8 +111,8 @@ export async function getApplicationDetail(applicationId: string, staffUserId: s
 
 export async function updateApplicationStatus(
   applicationId: string,
-  staffUserId: string,
   action: "approve" | "reject" | "waitlist" | "request_info",
+  actorId: string,
   data: { reason?: string; internalNote?: string; requestedDocs?: string[] }
 ) {
   const application = await prisma.programApplication.findUnique({
@@ -111,7 +124,8 @@ export async function updateApplicationStatus(
     throw new Error("Application not found");
   }
 
-  await requireOrgRole(staffUserId, application.program.organizationId, ["org_admin", "reviewer"]);
+  // Authorization is handled at API route level
+  // This service performs only business logic validation (workflow state changes)
 
   const statusMap: Record<string, string> = {
     approve: "approved",
@@ -130,7 +144,7 @@ export async function updateApplicationStatus(
         status: decision,
         decision,
         decisionReason: data.reason,
-        reviewedById: staffUserId,
+        reviewedById: actorId,
         reviewedAt: new Date(),
         internalNotes: data.internalNote ? [application.internalNotes ?? "", data.internalNote].filter(Boolean).join("\n\n") : application.internalNotes
       },
@@ -144,7 +158,7 @@ export async function updateApplicationStatus(
       data: {
         applicationId,
         type: "status_changed",
-        actorId: staffUserId,
+        actorId: actorId,
         fromStatus: previousStatus,
         toStatus: decision,
         metadata: {
@@ -160,7 +174,7 @@ export async function updateApplicationStatus(
         type: 'status_changed',
         level: 'INFO',
         organizationId: application.program.organizationId ?? undefined,
-        data: { applicationId, from: previousStatus, to: decision, actorName: staffUserId }
+        data: { applicationId, from: previousStatus, to: decision, actorName: actorId }
       });
     } catch (e) {
       console.error('queueTelegramAlert failed', e);
@@ -173,7 +187,7 @@ export async function updateApplicationStatus(
             data: {
               applicationId,
               documentType,
-              requestedBy: staffUserId,
+              requestedBy: actorId,
               notes: data.reason
             }
           })
@@ -186,7 +200,7 @@ export async function updateApplicationStatus(
         data: {
           applicationId,
           type: "note_added",
-          actorId: staffUserId,
+          actorId: actorId,
           metadata: { note: data.internalNote }
         }
       });
@@ -205,23 +219,17 @@ export async function updateApplicationStatus(
   const eventName = notifyEventMap[decision];
 
   if (eventName) {
-    await notificationService.notify(eventName as any, {
+    const applicantEmail = updated.user?.email ?? application.userId;
+
+    publishDomainEvent(eventName === "documents_requested" ? "documents.requested" : `application.${decision}`, {
       userId: application.userId,
+      email: applicantEmail,
       applicationId: application.id,
       programName: application.program.name,
       reason: data.reason,
       requestedDocs: data.requestedDocs,
-      locale: "en"
-    });
-
-    await notificationService.notify("ops_alert", {
-      userId: staffUserId,
-      applicationId: application.id,
-      programName: application.program.name,
-      eventName: eventName,
+      actorId,
       decision,
-      reason: data.reason,
-      locale: "en"
     });
 
     try {
@@ -239,7 +247,7 @@ export async function updateApplicationStatus(
   return updated;
 }
 
-export async function assignApplication(applicationId: string, staffUserId: string, assignToUserId: string) {
+export async function assignApplication(applicationId: string, assignToUserId: string, actorId: string) {
   const application = await prisma.programApplication.findUnique({
     where: { id: applicationId },
     include: { program: true }
@@ -249,7 +257,8 @@ export async function assignApplication(applicationId: string, staffUserId: stri
     throw new Error("Application not found");
   }
 
-  await requireOrgRole(staffUserId, application.program.organizationId, ["org_admin"]);
+  // Authorization is handled at API route level
+  // This service performs only business logic validation (assignment logic)
 
   const updated = await prisma.$transaction(async (tx) => {
     const updatedApplication = await tx.programApplication.update({
@@ -261,7 +270,7 @@ export async function assignApplication(applicationId: string, staffUserId: stri
       data: {
         applicationId,
         type: "assigned",
-        actorId: staffUserId,
+        actorId: actorId,
         metadata: { assignedTo: assignToUserId }
       }
     });
@@ -283,7 +292,7 @@ export async function assignApplication(applicationId: string, staffUserId: stri
   return updated;
 }
 
-export async function addInternalNote(applicationId: string, staffUserId: string, note: string) {
+export async function addInternalNote(applicationId: string, note: string, actorId: string) {
   const application = await prisma.programApplication.findUnique({
     where: { id: applicationId },
     include: { program: true }
@@ -293,13 +302,14 @@ export async function addInternalNote(applicationId: string, staffUserId: string
     throw new Error("Application not found");
   }
 
-  await requireOrgRole(staffUserId, application.program.organizationId, ["org_admin", "reviewer"]);
+  // Authorization is handled at API route level
+  // This service performs only business logic validation (note creation)
 
   const created = await prisma.applicationEvent.create({
     data: {
       applicationId,
       type: "note_added",
-      actorId: staffUserId,
+      actorId: actorId,
       metadata: { note }
     }
   });

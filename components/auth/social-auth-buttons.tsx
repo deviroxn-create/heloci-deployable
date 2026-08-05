@@ -21,7 +21,8 @@ export function SocialAuthButtons({ onError }: SocialAuthButtonsProps) {
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/applicant/dashboard`
+        // Redirect to auth callback that will determine correct dashboard
+        redirectTo: `${window.location.origin}/auth/callback`
       }
     });
     setBusy(false);

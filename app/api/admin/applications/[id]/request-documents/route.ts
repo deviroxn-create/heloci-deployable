@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
-import { updateApplicationStatus } from "@/lib/applications/review-service";
+import { authorizeApplicationDecision } from "@/lib/auth/application-authorization";
+import { updateApplicationStatus, getApplicationOrganizationId } from "@/lib/applications/review-service";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
@@ -18,7 +19,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   try {
-    const result = await updateApplicationStatus(id, user.id, "request_info", { reason, requestedDocs: documents });
+    const organizationId = await getApplicationOrganizationId(id);
+    if (!organizationId) {
+      return NextResponse.json({ error: "Application not found." }, { status: 404 });
+    }
+
+    await authorizeApplicationDecision(organizationId);
+
+    const result = await updateApplicationStatus(id, "request_info", user.id, { reason, requestedDocs: documents });
     return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 403 });

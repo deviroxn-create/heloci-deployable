@@ -1,8 +1,6 @@
 "use server";
 
-import { prisma } from "@/lib/prisma/client";
-import { notificationService } from "@/lib/notifications/notification.service";
-import { queueTelegramAlert } from "@/lib/telegram/alert-service";
+import { registerUserAccount } from "@/lib/auth/user-profile.service";
 
 export type RegisterResult =
   | { success: true }
@@ -17,27 +15,14 @@ export async function registerUser(data: {
   name: string;
 }): Promise<RegisterResult> {
   try {
-    const user = await prisma.user.upsert({
-      where: { email: data.email },
-      update: { name: data.name },
-      create: {
-        email: data.email,
-        name: data.name,
-        role: "APPLICANT"
-      }
-    });
+    if (process.env.NODE_ENV !== "production") {
+      console.debug("[registerUser] server action received", { email: data.email });
+    }
 
-    await notificationService.notify("user_registration", {
-      userId: user.id,
-      userEmail: user.email,
-      recipientEmail: user.email,
-      name: user.name || data.name
-    });
+    await registerUserAccount(data);
 
-    try {
-      await queueTelegramAlert({ type: 'user_created', level: 'INFO', organizationId: user.organizationId ?? undefined, data: { name: user.name || data.name, role: user.role, orgName: user.organizationId } });
-    } catch (e) {
-      console.error('auth.actions: queueTelegramAlert failed', e);
+    if (process.env.NODE_ENV !== "production") {
+      console.debug("[registerUser] server action completed", { email: data.email });
     }
 
     return { success: true };

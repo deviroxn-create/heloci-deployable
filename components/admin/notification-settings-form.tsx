@@ -89,7 +89,7 @@ export function NotificationSettingsForm({ initialSettings }: { initialSettings:
   const handleTest = () => {
     startTransition(async () => {
       const response = await sendTestNotificationAction(settings);
-      setStatus(response.delivered ? "Test notification sent." : "Test notification skipped.");
+      setStatus(response.success ? "Test notification sent." : "Test notification failed.");
     });
   };
 

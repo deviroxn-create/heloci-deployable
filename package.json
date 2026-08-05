@@ -6,17 +6,25 @@
     "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint . --ext .ts,.tsx --max-warnings=0",
     "db:generate": "prisma generate",
-    "db:seed": "prisma db seed"
+    "db:seed": "npm run db:generate && npx tsc prisma/seed.ts --esModuleInterop --module commonjs --target es2020 --outDir prisma && node prisma/seed.js",
+    "test": "node scripts/run-tests.cjs",
+    "test:e2e": "npx playwright test tests/e2e --config tests/e2e/playwright.config.ts",
+    "test:k2": "node scripts/run-tests.cjs tests/k2-*.test.ts"
   },
   "prisma": {
-    "seed": "ts-node prisma/seed.ts"
+    "seed": "node prisma/seed.js"
   },
   "dependencies": {
     "@cloudinary/url-gen": "^1.0.0",
     "@hookform/resolvers": "^3.2.0",
     "@prisma/client": "^5.13.0",
+    "@radix-ui/react-label": "^2.1.11",
+    "@radix-ui/react-radio-group": "^1.4.3",
+    "@radix-ui/react-select": "^2.3.3",
+    "@radix-ui/react-separator": "^1.1.0",
+    "@radix-ui/react-tabs": "^1.1.0",
     "@supabase/auth-helpers-nextjs": "^0.9.0",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.35.0",
@@ -43,6 +51,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@types/leaflet": "^1.9.4",
     "@types/node": "^20.14.1",
     "@types/react": "^19.0.0",
@@ -50,11 +59,13 @@
     "@typescript-eslint/eslint-plugin": "^8.62.0",
     "@typescript-eslint/parser": "^8.62.0",
     "autoprefixer": "^10.4.19",
+    "dotenv": "^17.4.2",
     "eslint": "^9.0.0",
     "eslint-config-next": "^16.2.3",
     "postcss": "^8.4.42",
     "prisma": "^5.13.0",
     "tailwindcss": "^3.4.4",
-    "ts-node": "^10.9.1"
+    "ts-node": "^10.9.1",
+    "tsconfig-paths": "^4.2.0"
   }
 }

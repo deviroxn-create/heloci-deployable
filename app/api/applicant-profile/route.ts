@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { applicantProfileSchema } from "@/lib/validations/applicant-profile.schema";
-import { loadApplicantProfile, saveApplicantProfile } from "@/services/applicant-profile.service";
+import { calculateProfileCompleteness, loadApplicantProfile, saveApplicantProfile } from "@/services/applicant-profile.service";
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -10,11 +10,7 @@ export async function GET() {
   }
 
   const profile = await loadApplicantProfile(user.id);
-  const completeness = {
-    score: 0,
-    status: "NOT_STARTED",
-    completedSections: []
-  };
+  const completeness = calculateProfileCompleteness(profile);
 
   return NextResponse.json({
     profile,
@@ -25,8 +21,8 @@ export async function GET() {
 export async function POST(req: Request) {
   const user = await getCurrentUser();
 
-  if (!user) {
-    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+  if (!user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   if (user.role !== "APPLICANT") {
@@ -35,11 +31,27 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const parsed = applicantProfileSchema.parse(body);
-    const result = await saveApplicantProfile({ userId: user.id, ...parsed });
+    const normalizedBody = typeof body === "object" && body && !Array.isArray(body) ? { ...body } : body;
+
+    if (normalizedBody && typeof normalizedBody === "object" && "income" in normalizedBody) {
+      if (normalizedBody.income === "prefer_not_to_say") {
+        normalizedBody.income = null;
+      } else if (typeof normalizedBody.income === "string" && normalizedBody.income.trim()) {
+        normalizedBody.income = { incomeRange: normalizedBody.income };
+      }
+    }
+
+    const parsed = applicantProfileSchema.safeParse(normalizedBody);
+
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid applicant profile payload." }, { status: 400 });
+    }
+
+    const result = await saveApplicantProfile({ userId: user.id, ...parsed.data });
 
     return NextResponse.json(result);
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to save profile." }, { status: 400 });
+    console.error("Applicant profile save failed:", error);
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to save profile." }, { status: 500 });
   }
 }

@@ -14,7 +14,7 @@ import {
   Users,
   Zap,
   Building2,
-  MessagesSquare
+  MessagesSquare,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { UserBadge } from "@/components/shared/user-badge";
@@ -27,7 +27,7 @@ const navItems = [
   { label: "Users", href: "/admin/users", icon: Users },
   { label: "Staff", href: "/admin/staff", icon: Home },
   { label: "Automation", href: "/admin/automation", icon: Zap },
-  { label: "Communications", href: "/admin/communications", icon: MessagesSquare },
+  { label: "Communication", href: "/admin/communication", icon: MessagesSquare },
   { label: "Settings", href: "/admin/settings", icon: Settings }
 ];
 

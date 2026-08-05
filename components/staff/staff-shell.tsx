@@ -9,15 +9,16 @@ import {
   LogOut,
   MessageSquare,
   BarChart3,
-  Star
+  Star,
+  Mail
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { UserBadge } from "@/components/shared/user-badge";
 
 const navItems = [
-  { label: "Dashboard", href: "/staff/dashboard", icon: LayoutDashboard },
+  { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
   { label: "Applications", href: "/staff/applications", icon: ClipboardList },
-  { label: "Messages", href: "/staff/messages", icon: MessageSquare },
+  { label: "Communication", href: "/staff/communication", icon: MessageSquare },
   { label: "Reviews", href: "/staff/reviews", icon: Star },
   { label: "Reports", href: "/staff/reports", icon: BarChart3 }
 ];

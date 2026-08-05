@@ -1,6 +1,5 @@
 import jsonLogic from "json-logic-js";
 import { prisma } from "@/lib/prisma/client";
-import { requireOrgRole } from "@/lib/auth/rbac";
 
 export interface ProgramEligibilityRuleInput {
   name?: string;
@@ -30,7 +29,8 @@ export async function createEligibilityRule(programId: string, staffUserId: stri
     throw new Error("program_not_found");
   }
 
-  await requireOrgRole(staffUserId, program.organizationId, ["org_admin"]);
+  // Authorization must be enforced at the API / server-action layer.
+  // Service enforces ownership and business rules only.
 
   const versionAggregate = await prisma.eligibilityRule.aggregate({
     where: { programId },

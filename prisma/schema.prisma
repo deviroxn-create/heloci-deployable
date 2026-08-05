@@ -1,76 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
-enum Role {
-  APPLICANT
-  STAFF
-  ADMIN
-}
-
-enum NotificationDeliveryStatus {
-  PENDING
-  QUEUED
-  PROCESSING
-  SENT
-  DELIVERED
-  READ
-  FAILED
-  CANCELLED
-}
-
-enum ApplicationStatus {
-  PENDING
-  UNDER_REVIEW
-  APPROVED
-  REJECTED
-  WAITLISTED
-}
-
 model User {
-  createdOrganizations    Organization[]               @relation("CreatedOrganizations")
   id                      String                       @id @default(cuid())
   name                    String?
   email                   String                       @unique
-  organizationId          String?
   role                    Role                         @default(APPLICANT)
   createdAt               DateTime                     @default(now())
   updatedAt               DateTime                     @updatedAt
+  organizationId          String?
+  departmentId            String?
+  employeeId              String?
+  employmentStatus        EmploymentStatus?
+  hireDate                DateTime?
+  jobTitle                String?
+  supervisorId            String?
+  teamId                  String?
+  applicantProfiles       ApplicantProfile?
   applications            Application[]
-  programApplications     ProgramApplication[]
-  assignedApplications    ProgramApplication[]         @relation("AssignedApplications")
-  reviewedApplications    ProgramApplication[]         @relation("ReviewedApplications")
-  applicantProfiles       ApplicantProfile[]
+  applicationEvents       ApplicationEvent[]
+  auditLogs               AuditLog[]
+  decisionsMade           CaseDecision[]               @relation("DecisionsMade")
+  flagsAdded              CaseFlag[]                   @relation("FlagsAdded")
+  flagsRemoved            CaseFlag[]                   @relation("FlagsRemoved")
+  sentCaseMessages        CaseMessage[]                @relation("sentCaseMessages")
+  communicationTimeline   CommunicationTimelineEntry[]
+  templatesCreated        DecisionTemplate[]           @relation("TemplatesCreated")
   documents               Document[]
-  messages                Message[]                    @relation("sentMessages")
+  documentRequests        DocumentRequest[]
+  documentReviews         DocumentRequest[]            @relation("DocumentReviews")
+  documentVerifications   DocumentVerification[]       @relation("DocumentReviews")
+  createdEligibilityRules EligibilityRule[]            @relation("EligibilityRuleCreator")
+  emailDrafts             EmailDraft[]                 @relation("EmailDraftAuthor")
+  sentInvitations         Invitation[]
   received                Message[]                    @relation("receivedMessages")
-  staffNotes              StaffNote[]
+  messages                Message[]                    @relation("sentMessages")
   notifications           Notification[]
   notificationLogs        NotificationLog[]
   notificationPreferences NotificationPreference[]
-  communicationTimeline   CommunicationTimelineEntry[]
-  applicationEvents       ApplicationEvent[]
-  documentRequests        DocumentRequest[]
-  auditLogs               AuditLog[]
-  programRecommendations  ProgramRecommendation[]
-  organization            Organization?                @relation(fields: [organizationId], references: [id])
+  createdOrganizations    Organization[]               @relation("CreatedOrganizations")
+  sentOrgCommunications   OrganizationCommunication[]  @relation("sentOrgCommunications")
   OrganizationMember      OrganizationMember[]
-  sentInvitations         Invitation[]
-  programsCreated         Program[]                    @relation("ProgramsCreated")
   programsArchived        Program[]                    @relation("ProgramsArchived")
+  programsCreated         Program[]                    @relation("ProgramsCreated")
+  assignedApplications    ProgramApplication[]         @relation("AssignedApplications")
+  reviewedApplications    ProgramApplication[]         @relation("ReviewedApplications")
+  programApplications     ProgramApplication[]
   programEvents           ProgramEvent[]               @relation("ProgramEventActor")
-  createdEligibilityRules EligibilityRule[]            @relation("EligibilityRuleCreator")
-  documentReviews         DocumentRequest[]            @relation("DocumentReviews")
+  programRecommendations  ProgramRecommendation[]
+  qaReviewer              QAReview[]                   @relation("QAReviewer")
+  qaReviewed              QAReview[]                   @relation("QAReviewed")
+  checklistCompletions    ReviewChecklistItem[]        @relation("ChecklistCompletions")
+  senderIdentitiesCreated SenderIdentity[]             @relation("SenderIdentityCreator")
+  staffNotes              StaffNote[]
+  department              Department?                  @relation(fields: [departmentId], references: [id])
+  organization            Organization?                @relation(fields: [organizationId], references: [id])
+  supervisor              User?                        @relation("Supervisor", fields: [supervisorId], references: [id])
+  subordinates            User[]                       @relation("Supervisor")
+  team                    Team?                        @relation(fields: [teamId], references: [id])
 }
 
 model Property {
   id                String          @id @default(cuid())
-  externalId        String?         @unique // e.g. Zillow zpid or slug
+  externalId        String?         @unique
   title             String
   description       String
   address           String
@@ -79,9 +77,9 @@ model Property {
   zip               String?
   latitude          Float?
   longitude         Float?
-  rent              Int // lowest unit price (cents omitted — stored as dollars)
-  rentMax           Int? // highest unit price for range display
-  bedrooms          Int // min bedrooms across units
+  rent              Int
+  rentMax           Int?
+  bedrooms          Int
   bathrooms         Int
   sqft              Int
   amenities         String[]
@@ -89,79 +87,79 @@ model Property {
   contactPhone      String?
   availabilityCount Int             @default(0)
   status            String          @default("AVAILABLE")
-  units             PropertyUnit[]
-  images            PropertyImage[]
-  applications      Application[]
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
+  applications      Application[]
+  images            PropertyImage[]
+  units             PropertyUnit[]
 }
 
 model PropertyUnit {
   id         String   @id @default(cuid())
-  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   propertyId String
   beds       Int
-  price      Int // monthly rent in dollars
+  price      Int
   available  Boolean  @default(true)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 }
 
 model PropertyImage {
   id         String   @id @default(cuid())
   url        String
   altText    String?
-  property   Property @relation(fields: [propertyId], references: [id])
   propertyId String
+  property   Property @relation(fields: [propertyId], references: [id])
 }
 
 model ApplicantProfile {
   id           String   @id @default(cuid())
-  user         User     @relation(fields: [userId], references: [id])
   userId       String   @unique
   profileData  Json
   completeness Json
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id])
 }
 
 model Program {
   id                     String                  @id @default(cuid())
   organizationId         String
-  organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   name                   String
   slug                   String                  @unique
   housingGoal            String
   status                 String                  @default("draft")
-  isArchived             Boolean                 @default(false)
-  publishedAt            DateTime?
-  requiredDocuments      Json?
-  summary                String?                 @db.Text
-  maxApplicants          Int?
-  createdBy              String
-  archivedAt             DateTime?
-  archivedBy             String?
-  eligibilitySummary     String?
   description            String?
-  priority               Int                     @default(0)
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
   category               String?
   deadline               DateTime?
   isPublic               Boolean                 @default(true)
   matchDescription       String?
-  workflowTriggers       WorkflowTrigger[]
-  waitlist               WaitlistEntry[]
-  maxWaitlistSize        Int?
+  priority               Int                     @default(0)
+  eligibilitySummary     String?
+  isArchived             Boolean                 @default(false)
+  publishedAt            DateTime?
+  requiredDocuments      Json?
+  archivedAt             DateTime?
+  archivedBy             String?
+  createdBy              String
+  maxApplicants          Int?
+  summary                String?
+  autoAssignReviewers    Boolean                 @default(false)
   decisionSlaDays        Int                     @default(14)
   documentSlaDays        Int                     @default(7)
-  autoAssignReviewers    Boolean                 @default(false)
-  eligibilityRules       EligibilityRule[]
+  maxWaitlistSize        Int?
   eligibilityResults     EligibilityResult[]
-  questionSets           QuestionSet[]
-  programApplications    ProgramApplication[]
-  programRecommendations ProgramRecommendation[]
-  programEvents          ProgramEvent[]          @relation("ProgramEventProgram")
-  createdByUser          User                    @relation("ProgramsCreated", fields: [createdBy], references: [id])
+  eligibilityRules       EligibilityRule[]
   archivedByUser         User?                   @relation("ProgramsArchived", fields: [archivedBy], references: [id])
-  createdAt              DateTime                @default(now())
-  updatedAt              DateTime                @updatedAt
+  createdByUser          User                    @relation("ProgramsCreated", fields: [createdBy], references: [id])
+  organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  programApplications    ProgramApplication[]
+  programEvents          ProgramEvent[]          @relation("ProgramEventProgram")
+  programRecommendations ProgramRecommendation[]
+  questionSets           QuestionSet[]
+  waitlist               WaitlistEntry[]
+  workflowTriggers       WorkflowTrigger[]
 }
 
 model ProgramEvent {
@@ -171,29 +169,83 @@ model ProgramEvent {
   actorId   String
   metadata  Json?
   createdAt DateTime @default(now())
-  program   Program  @relation("ProgramEventProgram", fields: [programId], references: [id], onDelete: Cascade)
   actor     User     @relation("ProgramEventActor", fields: [actorId], references: [id])
+  program   Program  @relation("ProgramEventProgram", fields: [programId], references: [id], onDelete: Cascade)
 
   @@index([programId, createdAt])
 }
 
 model Organization {
-  id                String               @id @default(cuid())
-  name              String
-  slug              String               @unique
-  description       String?
-  logoUrl           String?
-  website           String?
-  emailFromName     String?              @default("Heloci")
-  telegramChannelId String?
-  createdBy         String
-  isActive          Boolean              @default(true)
-  programs          Program[]
-  members           OrganizationMember[]
-  users             User[]
-  createdAt         DateTime             @default(now())
-  creator           User                 @relation("CreatedOrganizations", fields: [createdBy], references: [id])
-  invitations       Invitation[]
+  id                         String                      @id @default(cuid())
+  name                       String
+  slug                       String                      @unique
+  createdAt                  DateTime                    @default(now())
+  createdBy                  String
+  description                String?
+  emailFromName              String?                     @default("Heloci")
+  isActive                   Boolean                     @default(true)
+  logoUrl                    String?
+  telegramChannelId          String?
+  website                    String?
+  preferences                Json?
+  addressCity                String?
+  addressCountry             String?                     @default("USA")
+  addressState               String?
+  addressStreet              String?
+  addressZip                 String?
+  brandColors                Json?
+  email                      String?
+  metadata                   Json?
+  organizationType           OrganizationType            @default(HOUSING_AUTHORITY)
+  phone                      String?
+  taxId                      String?
+  timezone                   String?                     @default("America/New_York")
+  updatedAt                  DateTime                    @updatedAt
+  primarySenderId            String?
+  decisionTemplates          DecisionTemplate[]
+  departments                Department[]
+  emailDrafts                EmailDraft[]
+  invitations                Invitation[]
+  creator                    User                        @relation("CreatedOrganizations", fields: [createdBy], references: [id])
+  organizationCommunications OrganizationCommunication[]
+  members                    OrganizationMember[]
+  programs                   Program[]
+  senderIdentities           SenderIdentity[]
+  users                      User[]
+
+  @@index([createdAt])
+}
+
+model Department {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  code           String?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  teams          Team[]
+  staff          User[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, isActive])
+}
+
+model Team {
+  id           String     @id @default(cuid())
+  departmentId String
+  name         String
+  description  String?
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  staff        User[]
+
+  @@unique([departmentId, name])
+  @@index([departmentId, isActive])
 }
 
 model OrganizationMember {
@@ -219,8 +271,8 @@ model Invitation {
   expiresAt      DateTime
   acceptedAt     DateTime?
   createdAt      DateTime     @default(now())
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   inviter        User         @relation(fields: [invitedBy], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, email])
   @@index([token])
@@ -232,16 +284,16 @@ model EligibilityRule {
   version       Int      @default(1)
   name          String   @default("v1")
   rules         Json
-  explanation   String?
-  explanationNo String?
-  weight        Int      @default(1)
   isActive      Boolean  @default(true)
-  order         Int      @default(0)
   createdBy     String
   createdAt     DateTime @default(now())
+  explanation   String?
+  explanationNo String?
+  order         Int      @default(0)
   updatedAt     DateTime @updatedAt
-  program       Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
+  weight        Int      @default(1)
   creator       User     @relation("EligibilityRuleCreator", fields: [createdBy], references: [id])
+  program       Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
 
   @@index([programId, isActive])
 }
@@ -254,8 +306,8 @@ model QuestionSet {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  program   Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
   pages     Page[]
+  program   Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
 
   @@unique([programId, version])
   @@index([programId, isActive])
@@ -279,22 +331,22 @@ model Question {
   key            String
   label          String
   type           String
-  description    String?
-  placeholder    String?
   required       Boolean             @default(false)
+  placeholder    String?
+  helpText       String?
   options        Json?
   validation     Json?
-  conditional    Json?
-  profileMapping String?
-  order          Int                 @default(0)
-  page           Int                 @default(0)
-  section        String?
-  createdAt      DateTime            @default(now())
-  helpText       String?
-  optionsRaw     Json?
-  validationRaw  Json?
   isUniversal    Boolean             @default(false)
   profileField   String?
+  conditional    Json?
+  createdAt      DateTime            @default(now())
+  description    String?
+  optionsRaw     Json?
+  order          Int                 @default(0)
+  page           Int                 @default(0)
+  profileMapping String?
+  section        String?
+  validationRaw  Json?
   pageRelation   Page                @relation(fields: [pageId], references: [id], onDelete: Cascade)
   conditions     QuestionCondition[]
 
@@ -318,11 +370,11 @@ model EligibilityResult {
   score       Int?
   reason      Json
   ruleVersion Int
-  needsReview Boolean   @default(false)
-  matchedAt   DateTime  @default(now())
-  notifiedAt  DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  matchedAt   DateTime  @default(now())
+  needsReview Boolean   @default(false)
+  notifiedAt  DateTime?
   program     Program   @relation(fields: [programId], references: [id])
 
   @@unique([userId, programId])
@@ -337,8 +389,8 @@ model ProgramRecommendation {
   reason        String
   missingFields Json?
   createdAt     DateTime @default(now())
-  user          User     @relation(fields: [userId], references: [id])
   program       Program  @relation(fields: [programId], references: [id])
+  user          User     @relation(fields: [userId], references: [id])
 
   @@unique([userId, programId, type])
   @@index([userId, type])
@@ -346,9 +398,7 @@ model ProgramRecommendation {
 
 model Application {
   id                 String              @id @default(cuid())
-  applicant          User                @relation(fields: [applicantId], references: [id])
   applicantId        String
-  property           Property?           @relation(fields: [propertyId], references: [id])
   propertyId         String?
   status             ApplicationStatus   @default(PENDING)
   income             Int?
@@ -356,9 +406,11 @@ model Application {
   notes              String?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
+  applicant          User                @relation(fields: [applicantId], references: [id])
+  property           Property?           @relation(fields: [propertyId], references: [id])
   documents          Document[]
-  messages           Message[]
   eligibilityProfile EligibilityProfile?
+  messages           Message[]
   staffNotes         StaffNote[]
 }
 
@@ -370,25 +422,34 @@ model ProgramApplication {
   data             Json               @default("{}")
   currentPage      Int                @default(0)
   submittedAt      DateTime?
-  deadline         DateTime?
-  waitlistedAt     DateTime?
-  slaBreachedAt    DateTime?
-  assignedToId     String?
-  assignedAt       DateTime?
-  reviewedById     String?
-  reviewedAt       DateTime?
-  decision         String?
-  decisionReason   String?
-  internalNotes    String?            @db.Text
-  lastActivityAt   DateTime           @default(now()) @updatedAt
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
-  user             User               @relation(fields: [userId], references: [id])
-  program          Program            @relation(fields: [programId], references: [id])
-  assignedTo       User?              @relation("AssignedApplications", fields: [assignedToId], references: [id])
-  reviewedBy       User?              @relation("ReviewedApplications", fields: [reviewedById], references: [id])
+  assignedToId     String?
+  decision         String?
+  decisionReason   String?
+  internalNotes    String?
+  reviewedAt       DateTime?
+  reviewedById     String?
+  assignedAt       DateTime?
+  deadline         DateTime?
+  lastActivityAt   DateTime           @default(now()) @updatedAt
+  slaBreachedAt    DateTime?
+  waitlistedAt     DateTime?
+  departmentId     String?
+  teamId           String?
   events           ApplicationEvent[]
+  caseConversation CaseConversation?
+  caseDecisions    CaseDecision[]
+  caseFlags        CaseFlag[]
+  documents        Document[]
   documentRequests DocumentRequest[]
+  assignedTo       User?              @relation("AssignedApplications", fields: [assignedToId], references: [id])
+  program          Program            @relation(fields: [programId], references: [id])
+  reviewedBy       User?              @relation("ReviewedApplications", fields: [reviewedById], references: [id])
+  user             User               @relation(fields: [userId], references: [id])
+  qaReviews        QAReview[]
+  reviewChecklist  ReviewChecklist?
+  staffNotes       StaffNote[]
   waitlistEntry    WaitlistEntry?
 
   @@unique([userId, programId])
@@ -406,8 +467,8 @@ model ApplicationEvent {
   toStatus      String?
   metadata      Json?
   createdAt     DateTime           @default(now())
-  application   ProgramApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   actor         User               @relation(fields: [actorId], references: [id])
+  application   ProgramApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
   @@index([applicationId, createdAt])
 }
@@ -419,15 +480,17 @@ model DocumentRequest {
   status          String             @default("pending")
   requestedBy     String
   requestedAt     DateTime           @default(now())
-  expiresAt       DateTime?
-  reminderSentAt  DateTime?
   submittedAt     DateTime?
-  reviewedAt      DateTime?
-  reviewedBy      String?
-  autoExpired     Boolean            @default(false)
   fileUrl         String?
   notes           String?
+  autoExpired     Boolean            @default(false)
+  expiresAt       DateTime?
+  reminderSentAt  DateTime?
+  reviewedAt      DateTime?
+  reviewedBy      String?
+  messageId       String?            @unique
   application     ProgramApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  message         CaseMessage?       @relation("messageDocumentRequest", fields: [messageId], references: [id])
   requestedByUser User               @relation(fields: [requestedBy], references: [id])
   reviewer        User?              @relation("DocumentReviews", fields: [reviewedBy], references: [id])
 
@@ -460,67 +523,166 @@ model WaitlistEntry {
   promotedAt    DateTime?
   removedAt     DateTime?
   removeReason  String?
-  program       Program            @relation(fields: [programId], references: [id], onDelete: Cascade)
   application   ProgramApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  program       Program            @relation(fields: [programId], references: [id], onDelete: Cascade)
 
   @@index([programId, position, promotedAt])
 }
 
 model Document {
-  id            String      @id @default(cuid())
-  fileName      String
-  fileUrl       String
-  type          String
-  uploadedAt    DateTime    @default(now())
-  application   Application @relation(fields: [applicationId], references: [id])
-  applicationId String
-  uploader      User        @relation(fields: [uploaderId], references: [id])
-  uploaderId    String
+  id                   String                @id @default(cuid())
+  fileName             String
+  fileUrl              String
+  type                 String
+  uploadedAt           DateTime              @default(now())
+  applicationId        String?
+  uploaderId           String
+  programApplicationId String?
+  mimeType             String?
+  size                 Int?
+  application          Application?          @relation(fields: [applicationId], references: [id])
+  programApplication   ProgramApplication?   @relation(fields: [programApplicationId], references: [id])
+  uploader             User                  @relation(fields: [uploaderId], references: [id])
+  verification         DocumentVerification?
+}
+
+model OrganizationCommunication {
+  id               String                               @id @default(cuid())
+  organizationId   String
+  senderId         String
+  senderIdentityId String
+  subject          String
+  content          String
+  messageType      String                               @default("email")
+  status           String                               @default("sent")
+  metadata         Json?                                @default("{}")
+  createdAt        DateTime                             @default(now())
+  updatedAt        DateTime                             @updatedAt
+  organization     Organization                         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sender           User                                 @relation("sentOrgCommunications", fields: [senderId], references: [id])
+  senderIdentity   SenderIdentity                       @relation(fields: [senderIdentityId], references: [id])
+  recipients       OrganizationCommunicationRecipient[]
+
+  @@index([organizationId])
+  @@index([senderId])
+  @@index([createdAt])
+}
+
+model OrganizationCommunicationRecipient {
+  id              String                    @id @default(cuid())
+  communicationId String
+  email           String
+  name            String?
+  status          String                    @default("delivered")
+  deliveredAt     DateTime?
+  openedAt        DateTime?
+  communication   OrganizationCommunication @relation(fields: [communicationId], references: [id], onDelete: Cascade)
+
+  @@index([communicationId])
+  @@index([email])
+}
+
+model CaseConversation {
+  id                 String             @id @default(cuid())
+  applicationId      String             @unique
+  subject            String?
+  lastMessageAt      DateTime           @default(now())
+  lastMessageFrom    String?
+  applicantRead      Boolean            @default(false)
+  applicantReadAt    DateTime?
+  staffRead          Boolean            @default(false)
+  staffReadAt        DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  programApplication ProgramApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  messages           CaseMessage[]
+
+  @@index([applicationId])
+  @@index([lastMessageAt])
+}
+
+model CaseMessage {
+  id              String              @id @default(cuid())
+  conversationId  String
+  senderId        String
+  senderRole      String
+  content         String
+  read            Boolean             @default(false)
+  readAt          DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  conversation    CaseConversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender          User                @relation("sentCaseMessages", fields: [senderId], references: [id])
+  documentRequest DocumentRequest?    @relation("messageDocumentRequest")
+  attachments     MessageAttachment[]
+
+  @@index([conversationId, createdAt])
+  @@index([senderId])
+}
+
+model MessageAttachment {
+  id         String      @id @default(cuid())
+  messageId  String
+  fileName   String
+  fileUrl    String
+  mimeType   String
+  size       Int
+  uploadedAt DateTime    @default(now())
+  message    CaseMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
 }
 
 model Message {
   id            String       @id @default(cuid())
-  sender        User         @relation("sentMessages", fields: [senderId], references: [id])
   senderId      String
-  recipient     User         @relation("receivedMessages", fields: [recipientId], references: [id])
   recipientId   String
-  application   Application? @relation(fields: [applicationId], references: [id])
   applicationId String?
   content       String
   createdAt     DateTime     @default(now())
   read          Boolean      @default(false)
+  application   Application? @relation(fields: [applicationId], references: [id])
+  recipient     User         @relation("receivedMessages", fields: [recipientId], references: [id])
+  sender        User         @relation("sentMessages", fields: [senderId], references: [id])
 }
 
 model EligibilityProfile {
   id              String      @id @default(cuid())
-  application     Application @relation(fields: [applicationId], references: [id])
   applicationId   String      @unique
   score           Int?
   status          String
   recommendations String[]
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
+  application     Application @relation(fields: [applicationId], references: [id])
 }
 
 model StaffNote {
-  id            String      @id @default(cuid())
-  author        User        @relation(fields: [authorId], references: [id])
-  authorId      String
-  application   Application @relation(fields: [applicationId], references: [id])
-  applicationId String
-  content       String
-  createdAt     DateTime    @default(now())
+  id                 String              @id @default(cuid())
+  authorId           String
+  applicationId      String?
+  content            String
+  createdAt          DateTime            @default(now())
+  oldApplicationId   String?
+  tags               String[]            @default([])
+  updatedAt          DateTime            @updatedAt
+  programApplication ProgramApplication? @relation(fields: [applicationId], references: [id])
+  author             User                @relation(fields: [authorId], references: [id])
+  application        Application?        @relation(fields: [oldApplicationId], references: [id])
+
+  @@index([applicationId])
+  @@index([authorId])
 }
 
 model Notification {
   id        String   @id @default(cuid())
-  user      User     @relation(fields: [userId], references: [id])
   userId    String
   title     String
   body      String
   category  String
   seen      Boolean  @default(false)
   createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
 }
 
 model NotificationLog {
@@ -537,21 +699,22 @@ model NotificationLog {
   providerResponse Json?
   deliveryStatus   NotificationDeliveryStatus @default(PENDING)
   retryCount       Int                        @default(0)
-  maxRetries       Int                        @default(5)
-  nextRetryAt      DateTime?
   errorMessage     String?
   createdAt        DateTime                   @default(now())
   sentAt           DateTime?
   deliveredAt      DateTime?
   readAt           DateTime?
-  user             User?                      @relation(fields: [userId], references: [id])
   userId           String?
+  maxRetries       Int                        @default(5)
+  nextRetryAt      DateTime?
+  senderIdentityId String?
+  senderIdentity   SenderIdentity?            @relation("NotificationSenders", fields: [senderIdentityId], references: [id])
+  user             User?                      @relation(fields: [userId], references: [id])
   retryAttempts    NotificationRetryAttempt[]
-}
 
-enum NotificationTemplateStatus {
-  DRAFT
-  PUBLISHED
+  @@index([createdAt])
+  @@index([eventName, deliveryStatus])
+  @@index([senderIdentityId])
 }
 
 model CommunicationSettings {
@@ -567,32 +730,37 @@ model CommunicationSettings {
 }
 
 model NotificationTemplate {
-  id        String                     @id @default(cuid())
-  name      String
-  eventName String
-  channel   String
-  locale    String                     @default("en")
-  title     String
-  subject   String
-  html      String
-  plainText String
-  variables Json?
-  status    NotificationTemplateStatus @default(PUBLISHED)
-  active    Boolean                    @default(true)
-  version   Int                        @default(1)
-  createdAt DateTime                   @default(now())
-  updatedAt DateTime                   @updatedAt
+  id               String                     @id @default(cuid())
+  name             String
+  eventName        String
+  channel          String
+  subject          String
+  html             String
+  plainText        String
+  variables        Json?
+  active           Boolean                    @default(true)
+  version          Int                        @default(1)
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+  locale           String                     @default("en")
+  status           NotificationTemplateStatus @default(PUBLISHED)
+  title            String
+  organizationId   String?
+  senderIdentityId String?
+  senderIdentity   SenderIdentity?            @relation("TemplateSenders", fields: [senderIdentityId], references: [id])
+
+  @@index([eventName, channel, active])
 }
 
 model NotificationRetryAttempt {
   id                String                     @id @default(cuid())
-  notificationLog   NotificationLog            @relation(fields: [notificationLogId], references: [id])
   notificationLogId String
   attempt           Int
   status            NotificationDeliveryStatus
   errorMessage      String?
   providerResponse  Json?
   createdAt         DateTime                   @default(now())
+  notificationLog   NotificationLog            @relation(fields: [notificationLogId], references: [id])
 }
 
 model NotificationPreference {
@@ -610,21 +778,256 @@ model NotificationPreference {
 
 model CommunicationTimelineEntry {
   id        String   @id @default(cuid())
-  user      User     @relation(fields: [userId], references: [id])
   userId    String
   eventName String
   title     String
   details   String?
   metadata  Json?
   createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
 }
 
 model AuditLog {
   id        String   @id @default(cuid())
-  user      User?    @relation(fields: [userId], references: [id])
   userId    String?
   entity    String
   action    String
   meta      Json?
   createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id])
+}
+
+model ReviewChecklist {
+  id             String                @id @default(cuid())
+  applicationId  String                @unique
+  completedItems Int                   @default(0)
+  totalItems     Int                   @default(0)
+  completionRate Float                 @default(0)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  application    ProgramApplication    @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  items          ReviewChecklistItem[]
+
+  @@index([applicationId])
+}
+
+model ReviewChecklistItem {
+  id              String          @id @default(cuid())
+  checklistId     String
+  label           String
+  category        String
+  completed       Boolean         @default(false)
+  completedBy     String?
+  completedAt     DateTime?
+  notes           String?
+  order           Int             @default(0)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  checklist       ReviewChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  completedByUser User?           @relation("ChecklistCompletions", fields: [completedBy], references: [id])
+
+  @@index([checklistId, order])
+  @@index([checklistId, completed])
+}
+
+model DocumentVerification {
+  id              String    @id @default(cuid())
+  documentId      String    @unique
+  status          String    @default("pending")
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  notes           String?
+  rejectionReason String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  document        Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  reviewer        User?     @relation("DocumentReviews", fields: [reviewedBy], references: [id])
+
+  @@index([documentId])
+  @@index([status])
+}
+
+model CaseDecision {
+  id               String             @id @default(cuid())
+  applicationId    String
+  decision         String
+  reason           String
+  internalNotes    String?
+  applicantMessage String?
+  effectiveDate    DateTime?
+  expiresAt        DateTime?
+  decidedBy        String
+  decidedAt        DateTime           @default(now())
+  templateUsed     String?
+  conditions       Json?
+  supersededBy     String?
+  isActive         Boolean            @default(true)
+  application      ProgramApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  decider          User               @relation("DecisionsMade", fields: [decidedBy], references: [id])
+
+  @@index([applicationId, isActive])
+  @@index([decidedBy])
+  @@index([decision])
+}
+
+model DecisionTemplate {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  category       String
+  subject        String
+  body           String
+  variables      Json?
+  isActive       Boolean      @default(true)
+  isDefault      Boolean      @default(false)
+  createdBy      String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  creator        User         @relation("TemplatesCreated", fields: [createdBy], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, category, isActive])
+}
+
+model CaseFlag {
+  id            String             @id @default(cuid())
+  applicationId String
+  type          String
+  reason        String?
+  addedBy       String
+  addedAt       DateTime           @default(now())
+  removedAt     DateTime?
+  removedBy     String?
+  isActive      Boolean            @default(true)
+  adder         User               @relation("FlagsAdded", fields: [addedBy], references: [id])
+  application   ProgramApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  remover       User?              @relation("FlagsRemoved", fields: [removedBy], references: [id])
+
+  @@index([applicationId, isActive])
+  @@index([type, isActive])
+}
+
+model QAReview {
+  id            String             @id @default(cuid())
+  applicationId String
+  decisionId    String?
+  reviewerId    String
+  qaReviewerId  String
+  score         Int?
+  comments      String?
+  corrections   Json?
+  approved      Boolean            @default(false)
+  reviewedAt    DateTime           @default(now())
+  application   ProgramApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  qaReviewer    User               @relation("QAReviewer", fields: [qaReviewerId], references: [id])
+  reviewer      User               @relation("QAReviewed", fields: [reviewerId], references: [id])
+
+  @@index([applicationId])
+  @@index([reviewerId])
+  @@index([qaReviewerId])
+}
+
+model SenderIdentity {
+  id                         String                      @id @default(cuid())
+  organizationId             String
+  displayName                String
+  emailAddress               String
+  department                 String?
+  replyTo                    String?
+  signature                  String?
+  logoUrl                    String?
+  themeColor                 String?
+  verificationStatus         SenderVerificationStatus    @default(PENDING)
+  isActive                   Boolean                     @default(true)
+  isDefault                  Boolean                     @default(false)
+  createdBy                  String
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  lastVerifiedAt             DateTime?
+  verificationError          String?
+  notificationLogs           NotificationLog[]           @relation("NotificationSenders")
+  notificationTemplates      NotificationTemplate[]      @relation("TemplateSenders")
+  organizationCommunications OrganizationCommunication[]
+  creator                    User                        @relation("SenderIdentityCreator", fields: [createdBy], references: [id])
+  organization               Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, emailAddress])
+  @@index([organizationId, isActive])
+  @@index([organizationId, isDefault])
+}
+
+model EmailDraft {
+  id             String       @id @default(cuid())
+  organizationId String
+  authorId       String
+  recipientEmail String
+  cc             String[]
+  bcc            String[]
+  subject        String
+  body           String
+  templateId     String?
+  templateData   Json?
+  lastSavedAt    DateTime     @updatedAt
+  createdAt      DateTime     @default(now())
+  author         User         @relation("EmailDraftAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, authorId])
+  @@index([createdAt])
+}
+
+enum Role {
+  APPLICANT
+  STAFF
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum OrganizationType {
+  HOUSING_AUTHORITY
+  NGO
+  CHARITY
+  GOVERNMENT
+  PRIVATE
+  EDUCATIONAL
+  FAITH_BASED
+  OTHER
+}
+
+enum EmploymentStatus {
+  ACTIVE
+  INACTIVE
+  ON_LEAVE
+  TERMINATED
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  QUEUED
+  PROCESSING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  CANCELLED
+}
+
+enum ApplicationStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  WAITLISTED
+}
+
+enum NotificationTemplateStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum SenderVerificationStatus {
+  PENDING
+  VERIFIED
+  FAILED
+  UNKNOWN
 }

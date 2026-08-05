@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
+import { authorizeApplicationReview } from "@/lib/auth/application-authorization";
 import { getApplicationsForReview } from "@/lib/applications/review-service";
 
 export async function GET(req: Request) {
@@ -20,10 +21,15 @@ export async function GET(req: Request) {
   }
 
   try {
+    // Authorize application review access
+    await authorizeApplicationReview(orgId);
+
+    // Convert "me" filter to actual userId
+    const resolvedAssignedTo = assignedTo === "me" ? user.id : assignedTo;
+
     const result = await getApplicationsForReview(orgId, {
-      staffUserId: user.id,
       status: status.length ? status : undefined,
-      assignedTo,
+      assignedTo: resolvedAssignedTo,
       programId,
       search
     });

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma/client";
-import { notificationService } from "@/lib/notifications/notification.service";
+import { publishDomainEvent } from "@/lib/events/domain-event-publisher";
 
 export async function addApplicationToWaitlist(applicationId: string, actorId?: string, reason?: string) {
   const application = await prisma.programApplication.findUnique({
@@ -46,14 +46,14 @@ export async function addApplicationToWaitlist(applicationId: string, actorId?: 
     }
   });
 
-  await notificationService.notify("application_waitlisted", {
+  publishDomainEvent("application.waitlisted", {
     userId: application.userId,
     applicationId,
     programName: application.program.name,
     recipientEmail: application.user.email,
     locale: "en",
     reason,
-    position
+    position,
   });
 
   return waitlistEntry;
@@ -114,13 +114,13 @@ export async function promoteNextWaitlistEntry(programId: string, actorId?: stri
     }
   });
 
-  await notificationService.notify("admin_action", {
+  publishDomainEvent("admin.action", {
     userId: entry.application.userId,
     recipientEmail: entry.application.user.email,
     locale: "en",
     applicationId: entry.applicationId,
     programName: entry.application.program.name,
-    eventName: "waitlist_promoted"
+    eventName: "waitlist_promoted",
   });
 
   return promoted;

@@ -9,3 +9,10 @@ coverage
 .env.*.local
 tsconfig.tsbuildinfo
 .DS_Store
+# Build artifacts (should never be committed)
+.tmp-test/
+dist/
+build/
+
+# Compiled JavaScript from TypeScript (unless explicitly needed)
+*.js.map

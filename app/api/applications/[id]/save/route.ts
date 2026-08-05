@@ -1,8 +1,6 @@
-import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma/client";
 import { getCurrentUser } from "@/lib/auth/session";
-import { notificationService } from "@/lib/notifications/notification.service";
+import { saveApplicationDraft } from "@/lib/applications/application-service";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
@@ -15,25 +13,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const pageData = body.pageData as Record<string, unknown> | undefined;
   const currentPage = body.currentPage as number | undefined;
 
-  const application = await prisma.programApplication.findUnique({ where: { id } });
-  if (!application || application.userId !== user.id) {
-    return NextResponse.json({ error: "Application not found." }, { status: 404 });
-  }
+  try {
+    const updated = await saveApplicationDraft({
+      applicationId: id,
+      userId: user.id,
+      pageData,
+      currentPage,
+    });
 
-  const updated = await prisma.programApplication.update({
-    where: { id },
-    data: {
-      data: {
-        ...(typeof application.data === "object" && application.data !== null ? (application.data as Record<string, unknown>) : {}),
-        ...(pageData ?? {})
-      } as unknown as Prisma.JsonObject,
-      currentPage: currentPage ?? application.currentPage ?? 0
+    return NextResponse.json({ success: true, nextPage: updated.currentPage });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to save application.";
+    if (message === "Application not found.") {
+      return NextResponse.json({ error: message }, { status: 404 });
     }
-  });
-
-  if (application.status === "draft") {
-    await notificationService.notify("application_started", { userId: user.id, programId: application.programId, applicationId: application.id });
+    if (message === "Only draft applications can be saved.") {
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  return NextResponse.json({ success: true, nextPage: updated.currentPage });
 }

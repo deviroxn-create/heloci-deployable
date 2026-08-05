@@ -1,9 +1,10 @@
 "use server";
 
 import { createClient } from "@supabase/supabase-js";
-import { prisma } from "@/lib/prisma/client";
 import { getCurrentUser } from "@/lib/auth/session";
+import { requireOrgRole } from "@/lib/auth/rbac";
 import { revalidatePath } from "next/cache";
+import { createStaffMemberRecord } from "@/lib/staff/staff-management.service";
 
 // Service-role admin client — only used server-side
 function getAdminClient() {
@@ -23,9 +24,14 @@ export async function createStaffMember(formData: {
   email: string;
   password: string;
 }): Promise<CreateStaffResult> {
-  // Only admins can do this
   const caller = await getCurrentUser();
-  if (!caller || caller.role !== "ADMIN") {
+  if (!caller?.organizationId) {
+    return { success: false, error: "Organization not found." };
+  }
+
+  try {
+    await requireOrgRole(caller.id, caller.organizationId, ["org_admin"]);
+  } catch {
     return { success: false, error: "Unauthorized." };
   }
 
@@ -44,12 +50,26 @@ export async function createStaffMember(formData: {
     return { success: false, error: authError.message };
   }
 
-  // 2. Insert into Prisma with STAFF role
+  // 2. Explicitly confirm the email with email_verified metadata
   try {
-    await prisma.user.upsert({
-      where: { email },
-      update: { name, role: "STAFF" },
-      create: { name, email, role: "STAFF" }
+    await adminClient.auth.admin.updateUserById(authData.user.id, {
+      email_confirm: true,
+      user_metadata: {
+        email_verified: true
+      }
+    });
+  } catch (err) {
+    console.warn(`Warning: Failed to confirm email for ${email}:`, err);
+    // Don't fail the entire operation, just log the warning
+  }
+
+  // 3. Insert into Prisma with STAFF role and link to the current organization
+  try {
+    await createStaffMemberRecord({
+      name,
+      email,
+      organizationId: caller.organizationId,
+      createdById: caller.id
     });
   } catch (err) {
     // Roll back the Supabase user if Prisma fails

@@ -1,12 +1,12 @@
 "use server";
 
-import { notificationService } from "@/lib/notifications/notification.service";
+import { publishDomainEvent } from "@/lib/events/domain-event-publisher";
 
 export async function createPropertyAction(data: any) {
-  await notificationService.notify("homeowner_listing_submitted", {
+  publishDomainEvent("property.listing.submitted", {
     name: data?.ownerName || "Homeowner",
     recipientEmail: data?.email,
-    userEmail: data?.email
+    userEmail: data?.email,
   });
 
   return { success: true, id: "property-stub" };

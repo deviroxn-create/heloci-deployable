@@ -16,6 +16,11 @@ const settingsFilePath = path.join(process.cwd(), "lib", "notifications", "notif
 
 let cachedSettings: CommunicationSettings | null = null;
 let isLoading = false;
+let testOverrideCommunicationSettings: CommunicationSettings | null = null;
+
+export function setCommunicationSettingsForTest(settings: CommunicationSettings | null) {
+  testOverrideCommunicationSettings = settings;
+}
 
 function getDefaultSettings(): CommunicationSettings {
   return {
@@ -26,7 +31,7 @@ function getDefaultSettings(): CommunicationSettings {
       whatsapp: false,
       internal: true
     },
-    senderEmail: process.env.COMMUNICATION_SENDER_EMAIL || "support@heloci.ngo",
+    senderEmail: "support@heloci.us", // Use verified Heloci domain, never env vars
     telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || "",
     telegramChatId: process.env.TELEGRAM_CHAT_ID || "",
     events: {
@@ -38,7 +43,12 @@ function getDefaultSettings(): CommunicationSettings {
       new_recommendation_available: true,
       application_started: true,
       application_submitted: true,
+      application_conditional: true,
+      application_withdrawn: true,
       document_uploaded: true,
+      document_approved: true,
+      document_rejected: true,
+      document_replacement_requested: true,
       application_approved: true,
       application_rejected: true,
       application_waitlisted: true,
@@ -61,6 +71,7 @@ function getDefaultSettings(): CommunicationSettings {
       homeowner_listing_submitted: true,
       ai_conversation_started: true,
       ai_recommendation_generated: true,
+      message_created: true,
       admin_action: true,
       ops_alert: true,
       program_published: true,
@@ -69,12 +80,40 @@ function getDefaultSettings(): CommunicationSettings {
       staff_role_changed: true,
       staff_removed: true,
       system_error: true,
-      admin_test: true
+      admin_test: true,
+      custom_email: true
     } as any
   };
 }
 
+export function mergeCommunicationSettings(settings: Partial<CommunicationSettings> | null | undefined): CommunicationSettings {
+  const defaults = getDefaultSettings();
+
+  if (!settings) {
+    return defaults;
+  }
+
+  return {
+    enabled: settings.enabled ?? defaults.enabled,
+    channels: {
+      ...defaults.channels,
+      ...(settings.channels || {})
+    },
+    senderEmail: settings.senderEmail || defaults.senderEmail, // Never fallback to env vars with unverified addresses
+    telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || settings.telegramBotToken || defaults.telegramBotToken,
+    telegramChatId: process.env.TELEGRAM_CHAT_ID || settings.telegramChatId || defaults.telegramChatId,
+    events: {
+      ...defaults.events,
+      ...(settings.events || {})
+    }
+  };
+}
+
 export async function loadCommunicationSettings(): Promise<CommunicationSettings> {
+  if (testOverrideCommunicationSettings) {
+    return testOverrideCommunicationSettings;
+  }
+
   if (cachedSettings) {
     return cachedSettings;
   }
@@ -91,14 +130,15 @@ export async function loadCommunicationSettings(): Promise<CommunicationSettings
   try {
     const dbSettings = await prisma.communicationSettings.findUnique({ where: { id: "default" } });
     if (dbSettings) {
-      cachedSettings = {
+      const normalizedDbSettings = {
         enabled: dbSettings.enabled,
-        channels: dbSettings.channels as Record<NotificationChannel, boolean>,
-        senderEmail: dbSettings.senderEmail,
-        telegramBotToken: dbSettings.telegramBotToken || "",
-        telegramChatId: dbSettings.telegramChatId || "",
-        events: dbSettings.events as Record<NotificationEventName, boolean>
+        channels: (dbSettings.channels as Record<string, boolean> | null) ?? undefined,
+        senderEmail: dbSettings.senderEmail || undefined,
+        telegramBotToken: dbSettings.telegramBotToken || undefined,
+        telegramChatId: dbSettings.telegramChatId || undefined,
+        events: (dbSettings.events as Record<string, boolean> | null) ?? undefined
       };
+      cachedSettings = mergeCommunicationSettings(normalizedDbSettings as unknown as Partial<CommunicationSettings>);
     } else {
       cachedSettings = await loadSettingsFromJson();
     }
@@ -117,12 +157,7 @@ async function loadSettingsFromJson(): Promise<CommunicationSettings> {
   try {
     const raw = await fs.readFile(settingsFilePath, "utf8");
     const parsed = JSON.parse(raw) as Partial<CommunicationSettings>;
-    const settings = {
-      ...defaults,
-      ...parsed,
-      channels: { ...defaults.channels, ...(parsed.channels || {}) },
-      events: { ...defaults.events, ...(parsed.events || {}) }
-    };
+    const settings = mergeCommunicationSettings(parsed);
     await migrateSettingsToDatabase(settings);
     return settings;
   } catch {

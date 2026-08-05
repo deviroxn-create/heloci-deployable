@@ -59,6 +59,22 @@ test("sums score blocks for priority ranking", () => {
   assert.equal(result.score, 35);
 });
 
+test("treats unknown responses as neutral rather than failing eligibility", () => {
+  const rule = {
+    "==": [{ var: "employment.status" }, "teacher"]
+  };
+
+  const profile = {
+    employment: { status: "not_sure" }
+  };
+
+  const result = evaluateEligibilityRule(rule, profile);
+
+  assert.equal(result.isEligible, true);
+  assert.equal(result.needsReview, true);
+  assert.equal(result.failed.length, 0);
+});
+
 test("uses the latest active version of a rule", () => {
   const versions = [
     { version: 1, isActive: false, rules: { "==": [{ var: "employment.status" }, "teacher"] } },

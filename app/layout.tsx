@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
+import "@/lib/notifications/startup";
 import { siteConfig } from "@/lib/constants/site";
+import { SiteAssistant } from "@/components/ai/site-assistant";
 
 const plusJakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -17,7 +19,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" data-scroll-behavior="smooth" className={`${plusJakarta.variable} scroll-smooth`}>
-      <body className="min-h-screen bg-surface font-sans text-slate-950 antialiased">{children}</body>
+      <body className="min-h-screen bg-surface font-sans text-slate-950 antialiased">
+        {children}
+        <SiteAssistant />
+      </body>
     </html>
   );
 }

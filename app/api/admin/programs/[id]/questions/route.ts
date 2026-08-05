@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { publishQuestionSet, validateQuestionSetPayload, getActiveQuestionSet } from "@/lib/programs/question-service";
-import { notificationService } from "@/lib/notifications/notification.service";
+import { publishDomainEvent } from "@/lib/events/domain-event-publisher";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
@@ -29,10 +29,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   try {
     const questionSet = await publishQuestionSet(id, user.id, body);
-    await notificationService.notify("admin_action", {
+    publishDomainEvent("admin.action", {
       userId: user.id,
       recipientEmail: user.email,
-      locale: "en"
+      locale: "en",
     });
     return NextResponse.json(questionSet);
   } catch (error: any) {

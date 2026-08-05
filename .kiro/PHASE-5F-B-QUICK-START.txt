@@ -1,0 +1,141 @@
+════════════════════════════════════════════════════════════════════════════════
+  PHASE 5F-B — QUICK START GUIDE
+════════════════════════════════════════════════════════════════════════════════
+
+PROBLEM IDENTIFIED
+────────────────────────────────────────────────────────────────────────────────
+  🛑 ISP/Router blocking TCP port 5432 (PostgreSQL)
+  ✅ NOT configuration, firewall, antivirus, or routing
+  ✅ Confirmed by 6 diagnostic tests
+  ✅ Solvable with multiple paths
+
+SOLUTION (Pick One)
+────────────────────────────────────────────────────────────────────────────────
+
+  🔧 FASTEST: VPN (30 min, Free)
+     1. Download: https://mullvad.net or https://protonvpn.com
+     2. Install and open
+     3. Click "Connect"
+     4. Done
+
+  📱 VERIFY FIRST: Mobile Hotspot (5 min, Free)
+     1. Enable hotspot on phone
+     2. Connect laptop to hotspot
+     3. Run: Test-NetConnection ep-snowy...pooler -Port 5432
+     4. If works: Use VPN
+     5. If fails: Report back
+
+  📞 PERMANENT: Contact ISP (1-7 days, Free)
+     1. Call ISP support
+     2. Say: "Please whitelist port 5432 for ep-snowy...pooler"
+     3. Wait for confirmation
+
+  💻 LOCAL DB: PostgreSQL (30 min, Dev-only)
+     1. Start: net start postgresql-x64-17
+     2. Update: .env DATABASE_URL="postgresql://localhost/neondb"
+     3. Run: npx prisma migrate deploy
+
+QUICK TEST
+────────────────────────────────────────────────────────────────────────────────
+  After choosing solution, run:
+
+  PowerShell:
+    Test-NetConnection ep-snowy-hall-atck4ttn-pooler.c-9.us-east-1.aws.neon.tech -Port 5432
+
+  Should see: TcpTestSucceeded : True ✅
+
+VERIFY DATABASE ACCESS
+────────────────────────────────────────────────────────────────────────────────
+  cd c:\Users\peter\Desktop\dev_data\housing-program-main\heloci-main
+  npx prisma db pull
+
+  Should complete without error ✅
+
+DOCUMENTS TO READ
+────────────────────────────────────────────────────────────────────────────────
+  📋 PHASE-5F-B-ACTION-GUIDE.md ← Step-by-step recovery
+  ✓  PHASE-5F-B-CHECKLIST.md    ← Progress tracking
+  📊 PHASE-5F-B-SESSION-SUMMARY.md ← Full details
+
+WHAT HAPPENS NEXT (Tasks 8-10)
+────────────────────────────────────────────────────────────────────────────────
+  8. Test Login
+     - http://localhost:3000
+     - Try signup/login
+     - Verify works ✅
+
+  9. Test Dashboard
+     - After login, view dashboard
+     - Should load without errors ✅
+
+  10. Resume Phase 5F Tests
+      - npm test -- tests/phase-5f-verification.test.ts --run
+      - Expected: 2 tests pass ✅
+
+COMMANDS REFERENCE
+────────────────────────────────────────────────────────────────────────────────
+  Test connectivity:
+    Test-NetConnection ep-snowy-hall-atck4ttn-pooler.c-9.us-east-1.aws.neon.tech -Port 5432
+
+  Verify Prisma:
+    cd c:\Users\peter\Desktop\dev_data\housing-program-main\heloci-main
+    npx prisma db pull
+
+  Start app:
+    npm run dev
+
+  Run tests:
+    npm test -- tests/phase-5f-verification.test.ts --run
+
+DIAGNOSTIC RESULTS
+────────────────────────────────────────────────────────────────────────────────
+  ✅ PostgreSQL installed
+  ✅ DNS resolves correctly
+  ✅ IPv4 routing correct
+  ✅ Windows Firewall allows outbound
+  ✅ No antivirus blocking
+  ❌ TCP:5432 times out → ISP blocking
+
+ROOT CAUSE
+────────────────────────────────────────────────────────────────────────────────
+  ISP/Router has port filtering policy:
+  - Allows: Port 443 (HTTPS) ✅
+  - Blocks: Port 5432 (PostgreSQL) ❌
+  - Blocks: Port 3306 (MySQL) ❌
+  - Blocks: Port 80 (HTTP) ❌
+
+RECOVERY TIMELINE
+────────────────────────────────────────────────────────────────────────────────
+  VPN solution:      30 minutes → full access
+  Mobile hotspot:    5 minutes → verify blocker
+  ISP contact:       1-7 days → permanent fix
+  Local database:    30 minutes → dev-only workaround
+
+NEXT ACTION
+────────────────────────────────────────────────────────────────────────────────
+  1. Read: .kiro/PHASE-5F-B-ACTION-GUIDE.md
+  2. Choose: VPN / Hotspot test / ISP / Local DB
+  3. Implement: Follow guide for your choice
+  4. Test: Run connectivity test
+  5. Report: Let me know result
+  6. Resume: Tasks 8-10 verification
+
+STATUS
+────────────────────────────────────────────────────────────────────────────────
+  ✅ Diagnostics: Complete
+  ⏳ Recovery: Awaiting your action
+  ⏳ Verification: Ready to execute once connected
+  ⏳ Phase 5F: Ready to resume once verified
+
+RECOMMENDED SOLUTION: VPN (Mullvad)
+════════════════════════════════════════════════════════════════════════════════
+  1. Go to: https://mullvad.net
+  2. Download installer
+  3. Run installer
+  4. Open Mullvad
+  5. Click "Connect"
+  6. Test: npx prisma db pull
+  7. Should work ✅
+
+Everything else will follow automatically after connectivity is restored.
+════════════════════════════════════════════════════════════════════════════════

@@ -1,8 +1,8 @@
-import test from "node:test";
+import { test } from "node:test";
 import assert from "node:assert/strict";
 import { evaluateCondition, getFormForProgram } from "./renderer";
 import { validatePage } from "./validator";
-import { prisma } from "@/lib/prisma/client";
+import { prisma } from "../prisma/client";
 
 const profile = {
   employment: { status: "teacher" },
@@ -128,4 +128,32 @@ test("save draft updates application data and current page", async () => {
 
   assert.equal(updated.currentPage, 1);
   assert.equal((updated.data as Record<string, unknown>).years_teaching, 5);
+});
+
+test("getFormForProgram does not create a draft when createDraft is false", async () => {
+  const { user, program } = await createFormFixture();
+
+  const form = await getFormForProgram(program.slug, user.id, { createDraft: false });
+  assert.equal(form.applicationId, "");
+
+  const draftCount = await prisma.programApplication.count({
+    where: { userId: user.id, programId: program.id, status: "draft" }
+  });
+  assert.equal(draftCount, 0);
+});
+
+test("getFormForProgram creates a draft when createDraft is true", async () => {
+  const { user, program } = await createFormFixture();
+
+  const form = await getFormForProgram(program.slug, user.id, { createDraft: true });
+  assert.ok(form.applicationId);
+  assert.equal(typeof form.applicationId, "string");
+
+  const draft = await prisma.programApplication.findUnique({
+    where: { id: form.applicationId }
+  });
+  assert.ok(draft);
+  assert.equal(draft?.userId, user.id);
+  assert.equal(draft?.programId, program.id);
+  assert.equal(draft?.status, "draft");
 });

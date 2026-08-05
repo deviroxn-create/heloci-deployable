@@ -12,7 +12,7 @@ const navItems = [
   { label: "Dashboard", href: "/applicant/dashboard", icon: Home },
   { label: "Applications", href: "/applicant/applications", icon: ClipboardList },
   { label: "Documents", href: "/applicant/documents", icon: FileText },
-  { label: "Messages", href: "/applicant/messages", icon: MessageSquare },
+  { label: "Communication", href: "/applicant/communication", icon: MessageSquare },
   { label: "Settings", href: "/applicant/settings", icon: Settings }
 ];
 
@@ -121,7 +121,7 @@ export function ApplicantShell({ title, description, actions = [], children }: A
                 <Link href="/matches">View eligibility</Link>
               </Button>
               <Button asChild>
-                <Link href="/matches">New application</Link>
+                <Link href="/apply">New application</Link>
               </Button>
             </div>
           </div>

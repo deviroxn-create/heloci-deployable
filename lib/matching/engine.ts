@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma/client";
-import { notificationService } from "@/lib/notifications/notification.service";
+import { publishDomainEvent } from "@/lib/events/domain-event-publisher";
 import { loadApplicantProfile } from "@/services/applicant-profile.service";
 import type { Prisma } from "@prisma/client";
 
@@ -65,6 +65,23 @@ function getApplicationStatus(programId: string, applications: Array<{ programId
   if (match.status === "draft") return "draft";
   if (match.status === "submitted") return "submitted";
   return "not_started";
+}
+
+function normalizeIncomeValue(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "prefer_not_to_say" || normalized === "not_sure" || normalized === "unknown") return "prefer_not_to_say";
+    return normalized;
+  }
+  return undefined;
+}
+
+function getIncomeBracket(profileData: Record<string, unknown>): string {
+  const income = profileData.income as Record<string, unknown> | undefined;
+  if (income == null) return "unknown";
+  const direct = normalizeIncomeValue(income?.incomeRange ?? income?.income ?? income?.monthlyIncome ?? income?.monthly);
+  if (direct) return direct;
+  return "unknown";
 }
 
 async function getEligiblePrograms(userId: string) {
@@ -156,10 +173,13 @@ async function buildRecommendedActions(userId: string, matches: ProgramMatch[], 
   const profileData = profile as Record<string, unknown>;
   const missingFields = new Set<string>();
 
-  const actionable = matches.filter((match) => !match.isEligible && match.failed.length <= 2);
+  const incomeBracket = getIncomeBracket(profileData);
+  const actionable = matches.filter((match) => !match.isEligible && (match.failed.length <= 2 || match.failed.length === 0));
+  const fallbackPrograms = actionable.filter((match) => match.failed.length === 0 && match.score >= 50);
+
   for (const match of actionable) {
     for (const failure of match.failed) {
-      if (/income/i.test(failure) && !getNestedValue(profileData, "income.monthlyIncome") && !getNestedValue(profileData, "income.monthly")) {
+      if (/income/i.test(failure) && incomeBracket === "prefer_not_to_say") {
         missingFields.add("income.monthlyIncome");
       }
       if (/employment|teacher|work/i.test(failure) && !getNestedValue(profileData, "employment.status")) {
@@ -168,11 +188,18 @@ async function buildRecommendedActions(userId: string, matches: ProgramMatch[], 
     }
   }
 
-  const recommendations = Array.from(missingFields).map((field) => ({
-    action: field === "income.monthlyIncome" ? "Add income details to unlock more matches" : "Add employment details to unlock more matches",
-    programs: actionable.map((item) => item.programName).slice(0, 3),
-    missingFields: [field]
-  }));
+  const recommendations = [
+    ...(fallbackPrograms.length > 0 ? [{
+      action: "Complete your profile to unlock more matches",
+      programs: fallbackPrograms.slice(0, 3).map((item) => item.programName),
+      missingFields: ["income.monthlyIncome", "employment.status"]
+    }] : []),
+    ...Array.from(missingFields).map((field) => ({
+      action: field === "income.monthlyIncome" ? "Add income details to unlock more matches" : "Add employment details to unlock more matches",
+      programs: actionable.map((item) => item.programName).slice(0, 3),
+      missingFields: [field]
+    }))
+  ];
 
   await prisma.programRecommendation.deleteMany({ where: { userId } });
   await Promise.all(recommendations.map((recommendation) => prisma.programRecommendation.create({
@@ -196,14 +223,14 @@ async function notifyNewMatches(userId: string, matches: ProgramMatch[]) {
     });
     if (latest?.notifiedAt) continue;
 
-    await notificationService.notify("program_matched", {
+    publishDomainEvent("program.matched", {
       userId,
       programId: match.programId,
       programName: match.programName,
       score: match.score,
       matchDescription: match.matchDescription,
       deadline: match.deadline ? match.deadline.toISOString() : undefined,
-      locale: "en"
+      locale: "en",
     });
 
     await prisma.eligibilityResult.updateMany({
@@ -237,7 +264,7 @@ export async function generateRecommendations(userId: string): Promise<void> {
     if (failed.length > 2) continue;
 
     const missingFields = [] as string[];
-    if (failed.some((entry) => /income/i.test(entry)) && !getNestedValue(profileData, "income.monthlyIncome") && !getNestedValue(profileData, "income.monthly")) {
+    if (failed.some((entry) => /income/i.test(entry)) && getIncomeBracket(profileData) === "prefer_not_to_say") {
       missingFields.push("income.monthlyIncome");
     }
     if (failed.some((entry) => /employment|teacher|work/i.test(entry)) && !getNestedValue(profileData, "employment.status")) {

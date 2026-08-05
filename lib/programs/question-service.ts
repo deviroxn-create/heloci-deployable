@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma/client";
-import { requireOrgRole } from "@/lib/auth/rbac";
 
 export interface QuestionConditionInput {
   type: string;
@@ -94,7 +93,7 @@ export async function publishQuestionSet(programId: string, staffUserId: string,
     throw new Error("program_not_found");
   }
 
-  await requireOrgRole(staffUserId, program.organizationId, ["org_admin"]);
+  // Authorization should be performed at API entry points; service keeps ownership checks only.
 
   const versionAggregate = await prisma.questionSet.aggregate({
     where: { programId },

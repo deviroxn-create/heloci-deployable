@@ -28,8 +28,16 @@ export function RegisterForm() {
   });
 
   const onSubmit = async (values: RegisterValues) => {
+    if (busy) {
+      return;
+    }
+
     setError(null);
     setBusy(true);
+
+    if (process.env.NODE_ENV !== "production") {
+      console.debug("[RegisterForm] submitting registration", { email: values.email });
+    }
 
     // 1. Create the Supabase auth user
     const { data, error: authError } = await supabase.auth.signUp({

@@ -9,8 +9,8 @@ export default async function ApplicantLayout({ children }: { children: React.Re
   }
 
   if (user.role !== "APPLICANT") {
-    if (user.role === "STAFF") {
-      redirect("/staff/dashboard");
+    if (user.role === "STAFF" || user.role === "ADMIN") {
+      redirect("/admin/dashboard");
     }
     redirect("/admin/dashboard");
   }

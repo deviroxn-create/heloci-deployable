@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
-import { EmailService } from "@/lib/email/email.service";
 import { createApplication } from "@/services/application.service";
 
 export async function POST(request: Request) {
@@ -11,8 +10,8 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const programId = body.programId as string | undefined;
-  const programName = (body.programName as string | undefined) || (body.programSlug as string | undefined) || "Selected program";
+  const programId = typeof body.programId === "string" ? body.programId.trim() : "";
+  const programName = (typeof body.programName === "string" ? body.programName.trim() : "") || (typeof body.programSlug === "string" ? body.programSlug.trim() : "") || "Selected program";
   const payload = body.data as Record<string, unknown> | undefined;
 
   if (!programId) {
@@ -21,18 +20,6 @@ export async function POST(request: Request) {
 
   try {
     const application = await createApplication(user.id, programId, programName);
-
-    const emailService = new EmailService();
-    await emailService.sendEmail({
-      to: user.email,
-      template: "application_received",
-      data: {
-        firstName: user.name || "there",
-        applicationId: application.id,
-        status: application.status,
-        programName
-      }
-    });
 
     return NextResponse.json({ success: true, applicationId: application.id, payload });
   } catch (error) {

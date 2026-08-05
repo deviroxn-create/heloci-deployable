@@ -4,75 +4,8 @@ import { motion } from "framer-motion";
 import { ArrowRight, ShieldCheck, Sparkles, Star, Users, MapPin, MessageSquare, Home, FileText } from "lucide-react";
 import Link from "next/link";
 import { PageShell } from "@/components/shared/page-shell";
-import { PropertyCard } from "@/components/property/property-card";
+import FeaturedPrograms from "@/components/FeaturedPrograms";
 import { Button } from "@/components/ui/button";
-import type { Property } from "@/types/property";
-
-const featured: Property[] = [
-  {
-    id: "demo-property-1",
-    title: "Cedar Grove Supportive Home",
-    description: "Two-bedroom apartment near transit and case worker service centers.",
-    address: "120 Central Ave",
-    city: "Portland",
-    state: "OR",
-    zip: "97209",
-    latitude: 45.5231,
-    longitude: -122.6765,
-    rent: 720,
-    bedrooms: 2,
-    bathrooms: 1,
-    sqft: 840,
-    amenities: ["Transit access", "Community kitchen", "Service coordination"],
-    specialOffers: ["Case worker coordination"],
-    availabilityCount: 1,
-    status: "Available",
-    units: [{ id: "demo-property-1-unit", beds: 2, price: 720, available: true }],
-    images: []
-  },
-  {
-    id: "demo-property-2",
-    title: "Harborview Family Residence",
-    description: "Safe, affordable units with on-site support and family readiness services.",
-    address: "438 Harbor Blvd",
-    city: "Seattle",
-    state: "WA",
-    zip: "98101",
-    latitude: 47.6062,
-    longitude: -122.3321,
-    rent: 850,
-    bedrooms: 3,
-    bathrooms: 2,
-    sqft: 1100,
-    amenities: ["School access", "Medical shuttle", "Case manager support"],
-    specialOffers: ["Family readiness support"],
-    availabilityCount: 1,
-    status: "Available",
-    units: [{ id: "demo-property-2-unit", beds: 3, price: 850, available: true }],
-    images: []
-  },
-  {
-    id: "demo-property-3",
-    title: "Willow Lane Transitional Unit",
-    description: "One-bedroom apartment for veterans with medical and employment referral support.",
-    address: "781 Willow Ln",
-    city: "Austin",
-    state: "TX",
-    zip: "78701",
-    latitude: 30.2672,
-    longitude: -97.7431,
-    rent: 680,
-    bedrooms: 1,
-    bathrooms: 1,
-    sqft: 680,
-    amenities: ["Vet services", "Counseling support", "Nearby transit"],
-    specialOffers: ["Veteran referral support"],
-    availabilityCount: 1,
-    status: "Available",
-    units: [{ id: "demo-property-3-unit", beds: 1, price: 680, available: true }],
-    images: []
-  }
-];
 
 const steps = [
   {
@@ -146,10 +79,10 @@ export default function HomePage() {
 
             <div className="mt-8 flex flex-col gap-4 sm:flex-row">
               <Button asChild className="min-w-[170px]" size="md">
-                <Link href="/properties">Search Homes</Link>
+                <Link href="/check-eligibility">Check Eligibility</Link>
               </Button>
               <Button asChild variant="outline" className="min-w-[170px]" size="md">
-                <Link href="/eligibility">Check Eligibility</Link>
+                <Link href="/programs">Browse Programs</Link>
               </Button>
             </div>
 
@@ -219,16 +152,15 @@ export default function HomePage() {
       <motion.section initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.3 }} transition={{ duration: 0.5 }} className="space-y-6">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand">Featured homes</p>
-            <h2 className="mt-3 text-3xl font-semibold text-slate-950">Safe homes ready for support.</h2>
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand">Featured programs</p>
+            <h2 className="mt-3 text-3xl font-semibold text-slate-950">Programs you can apply to today.</h2>
           </div>
-          <Button variant="outline" className="w-full sm:w-auto">View all listings</Button>
+          <Button asChild variant="outline" className="w-full sm:w-auto">
+            <Link href="/programs">View all programs</Link>
+          </Button>
         </div>
-        <div className="no-scrollbar grid auto-cols-[minmax(320px,1fr)] grid-flow-col gap-5 overflow-x-auto pb-2 sm:grid-cols-1 md:grid-flow-row md:grid-cols-3">
-          {featured.map((property) => (
-            <PropertyCard key={property.id} property={property} />
-          ))}
-        </div>
+
+        <FeaturedPrograms />
       </motion.section>
 
       <motion.section initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.3 }} transition={{ duration: 0.5, delay: 0.1 }} className="grid gap-8 lg:grid-cols-[0.95fr_0.9fr]">
@@ -278,7 +210,9 @@ export default function HomePage() {
                 </div>
               ))}
             </div>
-            <Button className="mt-6 w-full">Try AI assistant</Button>
+            <Button asChild className="mt-6 w-full">
+              <Link href="/check-eligibility">Try AI assistant</Link>
+            </Button>
           </div>
         </div>
       </motion.section>
@@ -289,7 +223,9 @@ export default function HomePage() {
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand">Location intelligence</p>
             <h2 className="mt-3 text-3xl font-semibold text-slate-950">See supportive services near every property.</h2>
           </div>
-          <Button variant="outline" className="mt-6 md:mt-0">Explore map view</Button>
+          <Button asChild variant="outline" className="mt-6 md:mt-0">
+            <Link href="/programs">View programs</Link>
+          </Button>
         </div>
         <div className="mt-8 grid gap-6 lg:grid-cols-[1.35fr_0.65fr] lg:items-center">
           <div className="h-[420px] rounded-[28px] bg-slate-950/5 p-6">
@@ -368,7 +304,9 @@ export default function HomePage() {
             </div>
           </div>
           <p className="mt-5 max-w-md text-sm leading-7 text-white/80">Heloci coordinates your application, documents, and staff communication so you never feel alone in the process.</p>
-          <Button className="mt-8 w-full bg-white text-brand hover:bg-slate-100">Start Application</Button>
+          <Button asChild className="mt-8 w-full bg-white text-brand hover:bg-slate-100">
+            <Link href="/check-eligibility">Check Your Eligibility</Link>
+          </Button>
         </div>
       </motion.section>
     </PageShell>
