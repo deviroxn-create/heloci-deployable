@@ -109,8 +109,8 @@ export class AudienceResolver {
       },
       resolved: {
         recipientType: recipient?.type,
-        recipientUserId: recipient?.userId,
-        recipientEmail: recipient?.email
+        recipientUserId: recipient?.type === "user" ? recipient.userId : undefined,
+        recipientEmail: recipient?.type === "user" || recipient?.type === "email" ? recipient.email : undefined
       }
     });
     

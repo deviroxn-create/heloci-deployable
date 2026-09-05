@@ -21,7 +21,9 @@ envContent.split('\n').forEach(line => {
 const SUPABASE_URL = envVars.NEXT_PUBLIC_SUPABASE_URL;
 const SERVICE_ROLE_KEY = envVars.SUPABASE_SERVICE_ROLE_KEY;
 const ANON_KEY = envVars.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const TEST_PASSWORD = envVars.DEFAULT_ADMIN_PASSWORD || 'Super1234!';
+const TEST_PASSWORD = envVars.DEFAULT_ADMIN_PASSWORD;
+
+if (!TEST_PASSWORD) throw new Error('DEFAULT_ADMIN_PASSWORD is required');
 
 const TEST_EMAIL = 'superadmin@heloci.platform';
 

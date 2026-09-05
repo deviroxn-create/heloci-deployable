@@ -1,13 +1,14 @@
 import { prisma } from "@/lib/prisma/client";
 import { publishDomainEvent } from "@/lib/events/domain-event-publisher";
 
-export async function listMessageTemplates(eventNames: string[]) {
+export async function listMessageTemplates(eventNames: string[], organizationId?: string) {
   return prisma.notificationTemplate.findMany({
     where: {
       eventName: { in: eventNames },
       channel: "email",
       status: "PUBLISHED",
-      active: true
+      active: true,
+      ...(organizationId ? { OR: [{ organizationId }, { organizationId: null }] } : {})
     },
     select: {
       id: true,
@@ -22,20 +23,24 @@ export async function listMessageTemplates(eventNames: string[]) {
   });
 }
 
-export async function countMessageTemplates(eventNames: string[]) {
+export async function countMessageTemplates(eventNames: string[], organizationId?: string) {
   return prisma.notificationTemplate.count({
     where: {
       eventName: { in: eventNames },
       channel: "email",
       status: "PUBLISHED",
-      active: true
+      active: true,
+      ...(organizationId ? { OR: [{ organizationId }, { organizationId: null }] } : {})
     }
   });
 }
 
-export async function getMessageTemplateById(templateId: string) {
-  const template = await prisma.notificationTemplate.findUnique({
-    where: { id: templateId },
+export async function getMessageTemplateById(templateId: string, organizationId?: string) {
+  const template = await prisma.notificationTemplate.findFirst({
+    where: {
+      id: templateId,
+      ...(organizationId ? { OR: [{ organizationId }, { organizationId: null }] } : {})
+    },
     select: {
       id: true,
       name: true,
@@ -119,7 +124,7 @@ export async function getAllRecipientTypes() {
   return [];
 }
 
-export async function getMessageTemplateCategories() {
+export async function getMessageTemplateCategories(organizationId?: string) {
   const categories: Array<{ category: string; label: string; icon: string; count: number }> = [];
   const messageCategories = ["general", "approval", "rejection", "waitlist", "missing_documents", "appointment", "reminder"] as const;
 
@@ -134,7 +139,7 @@ export async function getMessageTemplateCategories() {
       reminder: ["admin_action"]
     }[cat];
 
-    const count = await countMessageTemplates(eventNames);
+    const count = await countMessageTemplates(eventNames, organizationId);
     const labelMap: Record<string, string> = {
       general: "General",
       approval: "Approval",

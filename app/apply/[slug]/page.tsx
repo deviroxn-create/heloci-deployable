@@ -18,6 +18,7 @@ import {
   type WizardData,
 } from "@/components/application/wizard-sections";
 import type { RenderedQuestion } from "@/lib/forms/renderer";
+import { supabase } from "@/lib/supabase/client";
 
 /* ─── Section config ─────────────────────────────────────────── */
 const STATIC_SECTIONS: WizardSection[] = [
@@ -157,6 +158,7 @@ export default function ApplyPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
 
   const topRef = useRef<HTMLDivElement>(null);
 
@@ -164,6 +166,12 @@ export default function ApplyPage() {
   useEffect(() => {
     if (!slug) return;
     void (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.replace(`/register?redirectTo=/apply/${slug}`);
+        return;
+      }
+      setAuthChecked(true);
       setLoading(true);
       setLoadError(null);
       try {
@@ -274,7 +282,7 @@ export default function ApplyPage() {
         setLoading(false);
       }
     })();
-  }, [slug]);
+  }, [router, slug]);
 
   /* ── Persist draft on change ── */
   useEffect(() => {
@@ -325,6 +333,14 @@ export default function ApplyPage() {
     const obj = rd as Record<string, unknown>;
     return Array.isArray(obj.optional) ? obj.optional.map(String) : [];
   }, [program]);
+
+  if (!authChecked) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 text-center text-slate-600">
+        Checking your account…
+      </div>
+    );
+  }
 
   /* ── Handlers ── */
   function handleChange(key: string, value: unknown) {

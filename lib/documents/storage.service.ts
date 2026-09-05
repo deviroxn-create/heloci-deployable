@@ -2,18 +2,22 @@
  * Document Storage Service
  * 
  * Abstraction layer for document storage.
- * Currently uses local filesystem, but can be easily migrated to:
- * - Cloudinary
- * - AWS S3
- * - Azure Blob Storage
- * 
- * To migrate, only this file needs to be changed - UI remains the same.
+ * Documents are stored in a private Supabase Storage bucket. The database keeps
+ * an internal storage locator while clients receive authenticated API URLs.
  */
 
-import { writeFile, mkdir, unlink } from 'fs/promises';
-import { existsSync } from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { createClient } from '@supabase/supabase-js';
+
+const BUCKET_NAME = 'heloci-documents';
+const STORAGE_PREFIX = `supabase://${BUCKET_NAME}/`;
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { persistSession: false, autoRefreshToken: false } }
+);
 
 export interface UploadedDocument {
   id: string;
@@ -32,22 +36,6 @@ export interface UploadOptions {
 }
 
 class DocumentStorageService {
-  private uploadDir: string;
-
-  constructor() {
-    // Store uploads in public/uploads directory
-    this.uploadDir = path.join(process.cwd(), 'public', 'uploads', 'documents');
-  }
-
-  /**
-   * Initialize storage directory
-   */
-  async init(): Promise<void> {
-    if (!existsSync(this.uploadDir)) {
-      await mkdir(this.uploadDir, { recursive: true });
-    }
-  }
-
   /**
    * Upload a document
    */
@@ -57,22 +45,26 @@ class DocumentStorageService {
     mimeType: string,
     options: UploadOptions
   ): Promise<UploadedDocument> {
-    await this.init();
+    const ext = path.extname(originalName).toLowerCase();
+    const safeExtension = /^\.[a-z0-9]{1,10}$/.test(ext) ? ext : '';
+    const objectKey = `${uuidv4()}${safeExtension}`;
 
-    // Generate unique filename
-    const ext = path.extname(originalName);
-    const uniqueId = uuidv4();
-    const fileName = `${options.userId}_${options.applicationId}_${uniqueId}${ext}`;
-    const filePath = path.join(this.uploadDir, fileName);
+    const { error } = await supabaseAdmin.storage
+      .from(BUCKET_NAME)
+      .upload(objectKey, file, {
+        contentType: mimeType,
+        upsert: false,
+      });
 
-    // Write file
-    await writeFile(filePath, file);
+    if (error) {
+      throw new Error('Document storage upload failed');
+    }
 
     // Return document metadata
     return {
-      id: uniqueId,
+      id: objectKey,
       fileName: originalName,
-      fileUrl: `/uploads/documents/${fileName}`,
+      fileUrl: `${STORAGE_PREFIX}${objectKey}`,
       mimeType,
       size: file.length,
       uploadedAt: new Date(),
@@ -83,21 +75,55 @@ class DocumentStorageService {
    * Delete a document
    */
   async delete(fileUrl: string): Promise<void> {
-    // Extract filename from URL
-    const fileName = path.basename(fileUrl);
-    const filePath = path.join(this.uploadDir, fileName);
-
-    // Delete file if exists
-    if (existsSync(filePath)) {
-      await unlink(filePath);
+    const objectKey = this.getObjectKey(fileUrl);
+    if (!objectKey) {
+      return;
     }
+
+    const { error } = await supabaseAdmin.storage
+      .from(BUCKET_NAME)
+      .remove([objectKey]);
+
+    if (error) {
+      throw new Error('Document storage delete failed');
+    }
+  }
+
+  async download(fileUrl: string): Promise<Buffer> {
+    const objectKey = this.getObjectKey(fileUrl);
+    if (!objectKey) {
+      throw new Error('Invalid document storage reference');
+    }
+
+    const { data, error } = await supabaseAdmin.storage
+      .from(BUCKET_NAME)
+      .download(objectKey);
+
+    if (error || !data) {
+      throw new Error('Document storage download failed');
+    }
+
+    return Buffer.from(await data.arrayBuffer());
+  }
+
+  getObjectKey(fileUrl: string): string | null {
+    if (!fileUrl.startsWith(STORAGE_PREFIX)) {
+      return null;
+    }
+
+    const objectKey = fileUrl.slice(STORAGE_PREFIX.length);
+    if (!/^[a-f0-9-]{36}\.[a-z0-9]{1,10}$/i.test(objectKey) && !/^[a-f0-9-]{36}$/i.test(objectKey)) {
+      return null;
+    }
+
+    return objectKey;
   }
 
   /**
    * Get document URL for viewing
    */
-  getViewUrl(fileUrl: string): string {
-    return fileUrl;
+  getViewUrl(_fileUrl: string, documentId: string): string {
+    return `/api/documents/${documentId}/preview`;
   }
 
   /**
@@ -141,7 +167,3 @@ class DocumentStorageService {
 
 // Export singleton instance
 export const documentStorageService = new DocumentStorageService();
-
-// For future migration to cloud storage, create adapters:
-// export class CloudinaryStorageAdapter implements DocumentStorageService { ... }
-// export class S3StorageAdapter implements DocumentStorageService { ... }

@@ -59,11 +59,16 @@ export async function getMessageTemplatesAction(category: MessageTemplateCategor
   if (!user) throw new Error("UNAUTHORIZED");
 
   const scope = resolveCommunicationScope(user, selectedOrgId);
+  const operationOrganizationId = getOperationOrganizationId(scope);
+
+  if (operationOrganizationId) {
+    await requireOrgRole(user.id, operationOrganizationId, ["org_admin", "case_worker"]);
+  }
 
   const eventNames = getCategoryEventNames(category);
 
   // Get published templates that match category
-  const templates = await listMessageTemplates(eventNames);
+  const templates = await listMessageTemplates(eventNames, operationOrganizationId ?? undefined);
 
   return templates.map(t => ({
     id: t.id,
@@ -84,8 +89,13 @@ export async function getMessageTemplateCategoriesAction(selectedOrgId?: string)
   if (!user) throw new Error("UNAUTHORIZED");
 
   const scope = resolveCommunicationScope(user, selectedOrgId);
+  const operationOrganizationId = getOperationOrganizationId(scope);
 
-  return getMessageTemplateCategories();
+  if (operationOrganizationId) {
+    await requireOrgRole(user.id, operationOrganizationId, ["org_admin", "case_worker"]);
+  }
+
+  return getMessageTemplateCategories(operationOrganizationId ?? undefined);
 }
 
 /**
@@ -96,8 +106,13 @@ export async function getMessageTemplateAction(templateId: string, selectedOrgId
   if (!user) throw new Error("UNAUTHORIZED");
 
   const scope = resolveCommunicationScope(user, selectedOrgId);
+  const operationOrganizationId = getOperationOrganizationId(scope);
 
-  return getMessageTemplateById(templateId);
+  if (operationOrganizationId) {
+    await requireOrgRole(user.id, operationOrganizationId, ["org_admin", "case_worker"]);
+  }
+
+  return getMessageTemplateById(templateId, operationOrganizationId ?? undefined);
 }
 
 /**

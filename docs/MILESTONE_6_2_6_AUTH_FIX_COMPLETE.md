@@ -383,7 +383,7 @@ if (!user.organizationId) {
 ```typescript
 {
   email: "superadmin@heloci.platform",
-  password: process.env.DEFAULT_ADMIN_PASSWORD ?? "Super1234!",
+  password: process.env.DEFAULT_ADMIN_PASSWORD,
   name: "Platform Super Admin",
   role: "SUPER_ADMIN",           // ✅ Correct
   label: "super_admin",
@@ -416,7 +416,7 @@ await fetch(`${supabaseUrl}/auth/v1/admin/users`, {
 ### Scenario 1: Platform Super Admin Login
 ```
 1. Navigate to /login
-2. Enter: superadmin@heloci.platform / Super1234!
+2. Enter the configured platform admin credentials.
 3. Submit form
 4. Expected: POST /api/auth/me
 5. Response: { role: "SUPER_ADMIN", organizationId: null }
@@ -427,7 +427,7 @@ await fetch(`${supabaseUrl}/auth/v1/admin/users`, {
 ### Scenario 2: Organization Admin Login
 ```
 1. Navigate to /login
-2. Enter: admin@heloci.ngo / Admin1234!
+2. Enter the configured organization admin credentials.
 3. Submit form
 4. Expected: POST /api/auth/me
 5. Response: { role: "ADMIN", organizationId: "org_heloci" }
@@ -438,7 +438,7 @@ await fetch(`${supabaseUrl}/auth/v1/admin/users`, {
 ### Scenario 3: Applicant Login
 ```
 1. Navigate to /login
-2. Enter: applicant@heloci.ngo / Applicant1234!
+2. Enter the configured applicant credentials.
 3. Submit form
 4. Expected: POST /api/auth/me
 5. Response: { role: "APPLICANT", organizationId: null }

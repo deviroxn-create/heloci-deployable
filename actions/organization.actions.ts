@@ -65,18 +65,21 @@ export async function saveOrganizationPreferencesAction(preferences: Record<stri
 export async function inviteOrganizationMemberAction(email: string, role: string) {
   const user = await getCurrentUser();
   if (!user?.organizationId) throw new Error("organization_not_found");
+  await requireOrgRole(user.id, user.organizationId, ["org_admin"]);
   return inviteStaff(user.organizationId, user.id, email, role);
 }
 
 export async function updateOrganizationMemberRoleAction(memberUserId: string, newRole: string) {
   const user = await getCurrentUser();
   if (!user?.organizationId) throw new Error("organization_not_found");
+  await requireOrgRole(user.id, user.organizationId, ["org_admin"]);
   return updateMemberRole(user.organizationId, user.id, memberUserId, newRole);
 }
 
 export async function removeOrganizationMemberAction(memberUserId: string) {
   const user = await getCurrentUser();
   if (!user?.organizationId) throw new Error("organization_not_found");
+  await requireOrgRole(user.id, user.organizationId, ["org_admin"]);
   return removeMember(user.organizationId, user.id, memberUserId);
 }
 

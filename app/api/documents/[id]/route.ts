@@ -25,7 +25,7 @@ export async function GET(
         document: {
           id: document.id,
           fileName: document.fileName,
-          fileUrl: documentStorageService.getViewUrl(document.fileUrl),
+          fileUrl: documentStorageService.getViewUrl(document.fileUrl, document.id),
           type: document.type,
           uploadedAt: document.uploadedAt,
         },

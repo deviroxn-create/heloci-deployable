@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
+import { requireOrgRole } from "@/lib/auth/rbac";
 import { sendEmail } from "@/lib/email/email.service";
 
 /**
@@ -31,6 +32,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    await requireOrgRole(user.id, organizationId, ["org_admin", "manager", "reviewer", "case_worker", "document_officer"]);
 
     if (!recipientEmail || !subject || !messageBody) {
       return NextResponse.json(

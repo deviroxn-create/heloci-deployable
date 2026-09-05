@@ -53,8 +53,17 @@ export interface EligibilityAssistantV2Props {
    *  questions that aren't covered by the built-in conversation config.        */
   pages: Array<{ id: string; title: string; questions: RenderedQuestion[] }>;
   userName?: string | null;
+  isGuest?: boolean;
   onComplete?: () => void;
 }
+
+type GuestEligibilityMatch = {
+  programId: string;
+  programName: string;
+  programSlug: string;
+  isEligible: boolean;
+  score?: number;
+};
 
 /* ─── Constants ──────────────────────────────────────────────── */
 
@@ -177,6 +186,7 @@ function StageTransitionBanner({ text }: { text: string }) {
 export default function EligibilityAssistantV2({
   pages,
   userName: initialUserName,
+  isGuest = false,
   onComplete,
 }: EligibilityAssistantV2Props) {
   const router = useRouter();
@@ -193,6 +203,7 @@ export default function EligibilityAssistantV2({
   const [userName, setUserName]         = useState(initialUserName ?? "there");
   const [sidebarOpen, setSidebarOpen]   = useState(false);
   const [prevStageId, setPrevStageId]   = useState<string | null>(null);
+  const [guestMatches, setGuestMatches] = useState<GuestEligibilityMatch[] | null>(null);
 
   const questionAreaRef = useRef<HTMLDivElement>(null);
 
@@ -267,22 +278,24 @@ export default function EligibilityAssistantV2({
         }
       } catch { /* ignore */ }
 
-      try {
-        const res = await fetch("/api/eligibility/progress");
-        if (!res.ok) return;
-        const data = await res.json().catch(() => ({})) as Record<string, unknown>;
-        if (data?.answers && typeof data.answers === "object") {
-          setAnswers((prev) => ({ ...prev, ...(data.answers as Record<string, unknown>) }));
-        }
-        if (typeof data?.currentIndex === "number" && data.currentIndex > 0) {
-          setStepIndex(data.currentIndex);
-          setShowWelcome(false);
-        }
-        if (typeof data?.userName === "string") setUserName(data.userName);
-      } catch { /* ignore */ }
+      if (!isGuest) {
+        try {
+          const res = await fetch("/api/eligibility/progress");
+          if (!res.ok) return;
+          const data = await res.json().catch(() => ({})) as Record<string, unknown>;
+          if (data?.answers && typeof data.answers === "object") {
+            setAnswers((prev) => ({ ...prev, ...(data.answers as Record<string, unknown>) }));
+          }
+          if (typeof data?.currentIndex === "number" && data.currentIndex > 0) {
+            setStepIndex(data.currentIndex);
+            setShowWelcome(false);
+          }
+          if (typeof data?.userName === "string") setUserName(data.userName);
+        } catch { /* ignore */ }
+      }
     }
     void restore();
-  }, []);
+  }, [isGuest]);
 
   /* ── Persist on change ── */
   useEffect(() => {
@@ -290,12 +303,13 @@ export default function EligibilityAssistantV2({
     try {
       window.localStorage.setItem(DRAFT_KEY, JSON.stringify({ answers, stepIndex }));
     } catch { /* ignore */ }
+    if (isGuest) return;
     void fetch("/api/eligibility/progress", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ currentIndex: stepIndex, answers }),
     }).catch(() => undefined);
-  }, [answers, stepIndex, showWelcome]);
+  }, [answers, stepIndex, showWelcome, isGuest]);
 
   /* ── Auto-scroll ── */
   useEffect(() => {
@@ -324,7 +338,7 @@ export default function EligibilityAssistantV2({
   });
 
   /* ── Build API payload from answers ── */
-  async function persistAnswers() {
+  async function persistAnswers(): Promise<Record<string, unknown>> {
     const payload: Record<string, unknown> = {};
     const metaAnswers: Record<string, unknown> = {};
 
@@ -368,6 +382,8 @@ export default function EligibilityAssistantV2({
       payload.meta = { ...((payload.meta as object) ?? {}), answers: metaAnswers };
     }
 
+    if (isGuest) return payload;
+
     const res = await fetch("/api/applicant-profile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -377,6 +393,7 @@ export default function EligibilityAssistantV2({
       const d = await res.json().catch(() => ({})) as { error?: string };
       throw new Error(d.error ?? "Unable to save answers.");
     }
+    return payload;
   }
 
   /* ── Handlers ── */
@@ -410,10 +427,21 @@ export default function EligibilityAssistantV2({
     setIsSubmitting(true);
     setValidationError(null);
     try {
-      await persistAnswers();
-      const res = await fetch("/api/matches/refresh", { method: "POST" });
-      const data = await res.json().catch(() => ({})) as { error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Eligibility check failed.");
+      const payload = await persistAnswers();
+      if (isGuest) {
+        const res = await fetch("/api/eligibility/public", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({})) as { error?: string; results?: GuestEligibilityMatch[] };
+        if (!res.ok) throw new Error(data.error ?? "Eligibility check failed.");
+        setGuestMatches(data.results ?? []);
+      } else {
+        const res = await fetch("/api/matches/refresh", { method: "POST" });
+        const data = await res.json().catch(() => ({})) as { error?: string };
+        if (!res.ok) throw new Error(data.error ?? "Eligibility check failed.");
+      }
       try { window.localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
       setShowCompletion(true);
       onComplete?.();
@@ -466,10 +494,18 @@ export default function EligibilityAssistantV2({
     return (
       <CompletionSummary
         answers={answers}
+        initialMatches={guestMatches ?? undefined}
+        isGuest={isGuest}
         onViewMatches={() => {
-          router.push("/matches/results");
+          router.push(isGuest ? "/register" : "/matches/results");
         }}
-        onSaveAndExit={handleSaveAndNavigate}
+        onSaveAndExit={() => {
+          if (isGuest) {
+            router.push("/register");
+            return;
+          }
+          void handleSaveAndNavigate();
+        }}
       />
     );
   }

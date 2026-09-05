@@ -142,14 +142,10 @@ const { error, data: authData } = await supabase.auth.signInWithPassword({
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      <SocialAuthButtons onError={setError} />
-
-      <AuthDivider label="Or continue with email" />
-
-      <div className="space-y-6">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+      <div className="space-y-5">
         <AuthInput
-          label="Email"
+          label="Email address"
           type="email"
           autoComplete="email"
           icon={Mail}
@@ -166,27 +162,27 @@ const { error, data: authData } = await supabase.auth.signInWithPassword({
         />
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <label className="inline-flex items-center gap-3 text-sm text-slate-700">
+      <div className="flex items-center justify-between gap-3">
+        <label className="inline-flex items-center gap-2 text-sm text-slate-700">
           <input
             type="checkbox"
             checked={rememberMe}
             onChange={(event) => setRememberMe(event.target.checked)}
-            className="h-4 w-4 rounded border border-slate-300 text-brand focus:ring-brand"
+            className="h-4 w-4 rounded border border-slate-300 text-[#006AFF] focus:ring-[#006AFF]"
           />
           Remember me
         </label>
-        <Link href="/forgot-password" className="text-sm font-semibold text-brand transition hover:text-brandHover">
+        <Link href="/forgot-password" className="text-sm font-medium text-[#006AFF] transition hover:text-[#0057e6]">
           Forgot password?
         </Link>
       </div>
 
       {error ? (
-        <div className="rounded-[16px] border border-error/20 bg-error/10 px-4 py-3 space-y-3">
-          <p className="text-sm text-error">{error}</p>
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 space-y-3">
+          <p className="text-sm text-red-700">{error}</p>
           {needsConfirmation && (
             resendSent ? (
-              <p className="text-sm font-semibold text-success">Confirmation email resent — check your inbox.</p>
+              <p className="text-sm font-semibold text-emerald-700">Confirmation email resent — check your inbox.</p>
             ) : (
               <button
                 type="button"
@@ -197,22 +193,22 @@ const { error, data: authData } = await supabase.auth.signInWithPassword({
                   setResendBusy(false);
                   setResendSent(true);
                 }}
-                className="text-sm font-semibold text-brand hover:underline disabled:opacity-50"
+                className="text-sm font-semibold text-[#006AFF] hover:underline disabled:opacity-50"
               >
-                {resendBusy ? "Sending..." : "Resend confirmation email →"}
+                {resendBusy ? "Sending..." : "Resend confirmation email"}
               </button>
             )
           )}
         </div>
       ) : null}
 
-      <Button type="submit" disabled={busy} className="h-14 w-full rounded-[16px] text-base font-semibold">
-        {busy ? "Signing in..." : "Sign In"}
+      <Button type="submit" disabled={busy} className="h-12 w-full rounded-full text-base font-semibold">
+        {busy ? "Signing in..." : "Sign in"}
       </Button>
 
       <p className="text-center text-sm text-slate-600">
         Don&apos;t have an account?{" "}
-        <Link href="/register" className="font-semibold text-brand transition hover:text-brandHover">
+        <Link href="/register" className="font-semibold text-[#006AFF] transition hover:text-[#0057e6]">
           Create one
         </Link>
       </p>

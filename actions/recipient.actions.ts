@@ -28,6 +28,23 @@ import type {
   RecipientOrgMember,
 } from "@/lib/communications/recipient.types";
 
+async function requireRecipientOrganizationAccess(organizationId: string) {
+  const user = await getCurrentUser();
+  if (!user?.id) {
+    throw new Error("Not authenticated");
+  }
+
+  if (user.role === "SUPER_ADMIN" && !user.organizationId) {
+    return user;
+  }
+
+  if (user.organizationId !== organizationId) {
+    throw new Error("Unauthorized access to organization");
+  }
+
+  return user;
+}
+
 /**
  * Search recipients across an organization
  * Reuses existing RBAC and organization isolation patterns
@@ -158,10 +175,7 @@ export async function getDepartmentMembers(
   departmentId: string,
   organizationId: string
 ): Promise<RecipientCard[]> {
-  const user = await getCurrentUser();
-  if (!user?.id) {
-    throw new Error("Not authenticated");
-  }
+  await requireRecipientOrganizationAccess(organizationId);
 
   // Verify department belongs to user's organization
   const dept = await getDepartmentDetails(departmentId);
@@ -278,6 +292,7 @@ export async function getAllOrganizationsForSearch(): Promise<
 export async function getOrganizationContextById(
   organizationId: string
 ): Promise<{ id: string; name: string }> {
+  await requireRecipientOrganizationAccess(organizationId);
   const org = await getOrganizationContextRecord(organizationId);
 
   if (!org) {
@@ -299,6 +314,8 @@ export async function validateRecipients(
   errors: string[];
   warnings: string[];
 }> {
+  await requireRecipientOrganizationAccess(organizationId);
+
   const errors: string[] = [];
   const warnings: string[] = [];
   const seenEmails = new Set<string>();

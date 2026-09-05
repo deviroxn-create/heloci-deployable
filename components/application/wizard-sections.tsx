@@ -1028,9 +1028,9 @@ export function BankingSection({ data, onChange }: SectionProps) {
       />
       
       <div className="space-y-8">
-        <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-5">
-          <p className="text-sm font-semibold text-amber-900">🔒 Secure Information</p>
-          <p className="mt-1 text-xs text-amber-800">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+          <p className="text-sm font-semibold text-slate-900">Secure information</p>
+          <p className="mt-1 text-xs text-slate-600">
             Your banking information is encrypted and stored securely. It will only be used for housing assistance payments and is never shared with third parties.
           </p>
         </div>
@@ -2200,7 +2200,7 @@ export function ReviewSection({ data, programName, onEditSection, requiredDocume
             if (uploadedDocs.length === 0) {
               return (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
-                  <p className="font-semibold text-amber-900">⚠️ No documents uploaded</p>
+                  <p className="font-semibold text-amber-900">No documents uploaded</p>
                   <p className="mt-1 text-amber-700">
                     You have {requiredDocs.length} required document{requiredDocs.length !== 1 ? 's' : ''} to upload. 
                     Click Edit to upload documents now, or you can submit and upload later.
@@ -2224,7 +2224,7 @@ export function ReviewSection({ data, programName, onEditSection, requiredDocume
                 
                 {uploadedRequired.length < requiredDocs.length && (
                   <div className="rounded-lg border border-amber-200 bg-amber-50/50 px-3 py-2 text-xs text-amber-700">
-                    ⚠️ {requiredDocs.length - uploadedRequired.length} required document{requiredDocs.length - uploadedRequired.length !== 1 ? 's' : ''} still needed
+                    {requiredDocs.length - uploadedRequired.length} required document{requiredDocs.length - uploadedRequired.length !== 1 ? 's' : ''} still needed
                   </div>
                 )}
                 

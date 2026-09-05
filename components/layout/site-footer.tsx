@@ -5,7 +5,7 @@ import { ArrowRight, Facebook, Instagram, Linkedin, Twitter } from "lucide-react
 export function SiteFooter() {
   return (
     <footer className="border-t border-border bg-white pt-16 pb-10">
-      <div className="mx-auto grid max-w-[1440px] gap-10 px-4 md:grid-cols-[1.4fr_1fr_1fr_1fr_1fr] md:px-8">
+      <div className="mx-auto grid max-w-[1440px] gap-10 px-4 lg:grid-cols-[1.4fr_1fr_1fr_1fr_1fr] md:px-8">
         <div className="space-y-5">
           <div className="inline-flex h-12 w-12 items-center justify-center rounded-3xl bg-slate-100 shadow-soft">
             <Image src="/heloci-logo.svg" alt="Heloci logo" width={48} height={48} className="rounded-3xl" />
@@ -114,7 +114,7 @@ export function SiteFooter() {
         </div>
       </div>
 
-      <div className="mx-auto mt-10 flex max-w-[1440px] flex-col gap-4 border-t border-border px-4 py-6 text-sm text-slate-500 md:flex-row md:items-center md:justify-between md:px-8">
+      <div className="mx-auto mt-10 flex max-w-[1440px] flex-col gap-4 border-t border-border px-4 py-6 text-sm text-slate-500 lg:flex-row lg:items-center lg:justify-between md:px-8">
         <p>© {new Date().getFullYear()} Heloci. Trusted housing support for communities and NGOs.</p>
         <Link href="/(marketing)/contact" className="inline-flex items-center gap-2 text-slate-700 transition hover:text-brand">
           <span>Join our newsletter</span>

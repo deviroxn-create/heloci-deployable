@@ -22,6 +22,7 @@ export interface EligibilityExplanation {
   matched: string[];
   failed: string[];
   needsReview: boolean;
+  ruleVersion?: number;
 }
 
 export interface RuleEvaluationResult {
@@ -212,6 +213,71 @@ function buildRuleContext(profile: Record<string, unknown>): Record<string, unkn
 export function evaluateEligibilityRule(rule: unknown, profile: Record<string, unknown>): RuleEvaluationResult {
   const ruleContext = buildRuleContext(profile);
 
+  if (
+    rule &&
+    typeof rule === "object" &&
+    !Array.isArray(rule) &&
+    "rules" in rule &&
+    rule.rules &&
+    typeof rule.rules === "object" &&
+    !Array.isArray(rule.rules)
+  ) {
+    const definition = rule.rules as { type?: string; conditions?: unknown };
+    const conditions = Array.isArray(definition.conditions) ? definition.conditions : [];
+    const evaluations = conditions.map((condition) => {
+      const item = condition as { field?: string; value?: unknown; operator?: string };
+      const actual = typeof item.field === "string" ? getRuleContextValue(ruleContext, item.field) : undefined;
+      const expected = item.value;
+      let isMatch = false;
+
+      switch (item.operator) {
+        case "eq":
+        case "equals":
+          isMatch = actual === expected;
+          break;
+        case "neq":
+        case "not_equals":
+          isMatch = actual !== expected;
+          break;
+        case "gt":
+          isMatch = Number(actual) > Number(expected);
+          break;
+        case "gte":
+          isMatch = Number(actual) >= Number(expected);
+          break;
+        case "lt":
+          isMatch = Number(actual) < Number(expected);
+          break;
+        case "lte":
+          isMatch = Number(actual) <= Number(expected);
+          break;
+        case "in":
+          isMatch = Array.isArray(expected) && expected.includes(actual);
+          break;
+        default:
+          isMatch = false;
+      }
+
+      return {
+        isMatch,
+        description: `${describePath(item.field)} ${item.operator ?? "matches"} ${formatValue(expected)}`
+      };
+    });
+
+    const isEligible = definition.type === "all"
+      ? evaluations.length > 0 && evaluations.every((item) => item.isMatch)
+      : evaluations.some((item) => item.isMatch);
+    const matched = evaluations.filter((item) => item.isMatch).map((item) => item.description);
+    const failed = evaluations.filter((item) => !item.isMatch).map((item) => item.description);
+
+    return {
+      isEligible,
+      matched,
+      failed,
+      needsReview: false
+    };
+  }
+
   const evaluateNode = (node: unknown): RuleEvaluationResult => {
     if (!node || typeof node !== "object" || Array.isArray(node)) {
       return {
@@ -312,12 +378,59 @@ export function resolveActiveRule(versions: EligibilityRuleVersion[]) {
 
 export async function runEligibilityEngine(userId: string): Promise<EligibilityExplanation[]> {
   const profile = await loadApplicantProfile(userId);
+  const results = await evaluateEligibilityForProfile(profile as Record<string, unknown>);
+
+  await Promise.all(results.map(async (result) => {
+    await prismaClient.eligibilityResult.upsert({
+      where: {
+        userId_programId: {
+          userId,
+          programId: result.programId
+        }
+      },
+      update: {
+        isEligible: result.isEligible,
+        score: result.score ?? null,
+        reason: {
+          matched: result.matched,
+          failed: result.failed,
+          score_breakdown: result.score ? [result.score] : []
+        },
+        ruleVersion: result.ruleVersion ?? 1,
+        needsReview: result.needsReview
+      },
+      create: {
+        userId,
+        programId: result.programId,
+        isEligible: result.isEligible,
+        score: result.score ?? null,
+        reason: {
+          matched: result.matched,
+          failed: result.failed,
+          score_breakdown: result.score ? [result.score] : []
+        },
+        ruleVersion: result.ruleVersion ?? 1,
+        needsReview: result.needsReview
+      }
+    });
+  }));
+
+  publishDomainEvent("eligibility.assessed", {
+    userId,
+    matchCount: results.filter((item) => item.isEligible).length,
+    topProgram: results.find((item) => item.isEligible)?.programName,
+  });
+
+  return results;
+}
+
+export async function evaluateEligibilityForProfile(profile: Record<string, unknown>): Promise<EligibilityExplanation[]> {
   const ruleContext = buildRuleContext(profile as Record<string, unknown>);
 
   const isDevelopment = process.env.NODE_ENV === "development" || process.env.DEBUG_ELIGIBILITY === "true";
 
   if (isDevelopment) {
-    console.log("\n🔍 [Eligibility Engine] Running for user:", userId);
+    console.log("\n🔍 [Eligibility Engine] Running profile evaluation");
     console.log("📋 [Profile Context]:", JSON.stringify(ruleContext, null, 2));
   }
 
@@ -378,41 +491,9 @@ export async function runEligibilityEngine(userId: string): Promise<EligibilityE
         score: evaluation.score,
         matched: evaluation.matched.length > 0 ? evaluation.matched : evaluation.isEligible ? ["Rule matched"] : [],
         failed: evaluation.failed.length > 0 ? evaluation.failed : evaluation.isEligible ? [] : ["Rule did not match"],
-        needsReview: evaluation.needsReview
+        needsReview: evaluation.needsReview,
+        ruleVersion: activeRule?.version ?? 1
       };
-
-      await prismaClient.eligibilityResult.upsert({
-        where: {
-          userId_programId: {
-            userId,
-            programId: program.id
-          }
-        },
-        update: {
-          isEligible: explanation.isEligible,
-          score: explanation.score ?? null,
-          reason: {
-            matched: explanation.matched,
-            failed: explanation.failed,
-            score_breakdown: explanation.score ? [explanation.score] : []
-          },
-          ruleVersion: activeRule?.version ?? 1,
-          needsReview: explanation.needsReview
-        },
-        create: {
-          userId,
-          programId: program.id,
-          isEligible: explanation.isEligible,
-          score: explanation.score ?? null,
-          reason: {
-            matched: explanation.matched,
-            failed: explanation.failed,
-            score_breakdown: explanation.score ? [explanation.score] : []
-          },
-          ruleVersion: activeRule?.version ?? 1,
-          needsReview: explanation.needsReview
-        }
-      });
 
       return explanation;
     })
@@ -423,12 +504,6 @@ export async function runEligibilityEngine(userId: string): Promise<EligibilityE
   if (isDevelopment) {
     console.log(`\n✨ [Final Results]: ${eligibleCount} eligible / ${results.length} total programs`);
   }
-
-  publishDomainEvent("eligibility.assessed", {
-    userId,
-    matchCount: eligibleCount,
-    topProgram: results.find((item: EligibilityExplanation) => item.isEligible)?.programName,
-  });
 
   return results.sort((left: EligibilityExplanation, right: EligibilityExplanation) => Number(right.isEligible) - Number(left.isEligible) || Number(right.score ?? 0) - Number(left.score ?? 0));
 }

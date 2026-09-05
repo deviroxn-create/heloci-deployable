@@ -12,7 +12,7 @@ const navItems = [
   { label: "Dashboard", href: "/applicant/dashboard", icon: Home },
   { label: "Applications", href: "/applicant/applications", icon: ClipboardList },
   { label: "Documents", href: "/applicant/documents", icon: FileText },
-  { label: "Communication", href: "/applicant/communication", icon: MessageSquare },
+  { label: "Messages", href: "/applicant/messages", icon: MessageSquare },
   { label: "Settings", href: "/applicant/settings", icon: Settings }
 ];
 

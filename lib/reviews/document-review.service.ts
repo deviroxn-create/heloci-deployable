@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma/client";
 import { publishDomainEvent } from "@/lib/events/domain-event-publisher";
+import { documentStorageService } from "@/lib/documents/storage.service";
 
 /**
  * Document Review Service
@@ -134,7 +135,7 @@ export async function getApplicationDocuments(
   return documents.map((doc) => ({
     id: doc.id,
     fileName: doc.fileName,
-    fileUrl: doc.fileUrl,
+    fileUrl: documentStorageService.getViewUrl(doc.fileUrl, doc.id),
     type: doc.type,
     uploadedAt: doc.uploadedAt,
     uploadedBy: doc.uploader,

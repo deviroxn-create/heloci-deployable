@@ -16,3 +16,7 @@ build/
 
 # Compiled JavaScript from TypeScript (unless explicitly needed)
 *.js.map
+prisma/seed.js
+
+# Uploaded documents must never be committed or served from the public tree
+public/uploads/documents/

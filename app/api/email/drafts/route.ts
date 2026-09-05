@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
+import { requireOrgRole } from "@/lib/auth/rbac";
 import { saveEmailDraft, getEmailDrafts } from "@/lib/email/email.service";
 
 /**
@@ -24,6 +25,8 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    await requireOrgRole(user.id, organizationId, ["org_admin", "manager", "reviewer", "case_worker", "document_officer"]);
 
     const result = await getEmailDrafts(user.id, organizationId, { page, pageSize });
 
@@ -68,6 +71,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    await requireOrgRole(user.id, organizationId, ["org_admin", "manager", "reviewer", "case_worker", "document_officer"]);
 
     if (!recipientEmail || !subject) {
       return NextResponse.json(

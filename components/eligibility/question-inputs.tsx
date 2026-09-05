@@ -13,28 +13,6 @@ function isMultiSelectValue(value: unknown): value is string[] {
   return Array.isArray(value);
 }
 
-function getCardMeta(optionValue: string, label: string): { icon: string } {
-  const v = optionValue.toLowerCase();
-  const l = label.toLowerCase();
-  if (/prefer|skip|not_sure|unsure/i.test(v)) return { icon: "🤐" };
-  if (/veteran|military/i.test(l)) return { icon: "🎖️" };
-  if (/disab/i.test(l)) return { icon: "♿" };
-  if (/rent|rental/i.test(l)) return { icon: "🏠" };
-  if (/buy|purchase|own/i.test(l)) return { icon: "🔑" };
-  if (/emergency/i.test(l)) return { icon: "🚨" };
-  if (/yes|true/i.test(v)) return { icon: "✅" };
-  if (/no|false/i.test(v)) return { icon: "❌" };
-  if (/full.?time|full time/i.test(l)) return { icon: "💼" };
-  if (/part.?time|part time/i.test(l)) return { icon: "⏰" };
-  if (/self.?employ|freelance/i.test(l)) return { icon: "🧑‍💻" };
-  if (/unemploy/i.test(l)) return { icon: "🔍" };
-  if (/retired/i.test(l)) return { icon: "🏖️" };
-  if (/student/i.test(l)) return { icon: "📚" };
-  if (/single/i.test(l)) return { icon: "👤" };
-  if (/couple|married/i.test(l)) return { icon: "👫" };
-  if (/family|children/i.test(l)) return { icon: "👨‍👩‍👧" };
-  return { icon: "✦" };
-}
 
 /* ─────────────────────────────────────────────
    Radio Cards (single-select, ≤ 8 options)
@@ -51,7 +29,6 @@ export function RadioCards({ options, value, onChange }: RadioCardsProps) {
     <div className="grid gap-3 sm:grid-cols-2" role="radiogroup">
       {options.map((option) => {
         const selected = String(value ?? "") === String(option.value);
-        const meta = getCardMeta(option.value, option.label);
         return (
           <button
             key={option.value}
@@ -60,7 +37,7 @@ export function RadioCards({ options, value, onChange }: RadioCardsProps) {
             aria-checked={selected}
             onClick={() => onChange(option.value)}
             className={cn(
-              "group relative flex min-h-[80px] cursor-pointer items-start gap-4 rounded-2xl border p-5 text-left shadow-sm transition-all duration-200",
+              "group relative flex min-h-[80px] cursor-pointer items-center rounded-2xl border p-5 text-left shadow-sm transition-all duration-200",
               "hover:-translate-y-0.5 hover:shadow-md",
               "focus:outline-none focus:ring-2 focus:ring-[#006AFF]/30",
               selected
@@ -68,14 +45,9 @@ export function RadioCards({ options, value, onChange }: RadioCardsProps) {
                 : "border-slate-200 bg-white hover:border-[#006AFF]/40 hover:bg-[#fafcff]"
             )}
           >
-            <span className="text-2xl leading-none" aria-hidden="true">
-              {meta.icon}
-            </span>
-            <span className="flex flex-col gap-0.5">
-              <span className="font-semibold text-slate-900">{option.label}</span>
-            </span>
+            <span className="flex-1 font-semibold text-slate-900">{option.label}</span>
             {selected && (
-              <CheckCircle2 className="absolute right-4 top-4 h-5 w-5 text-[#006AFF]" />
+              <CheckCircle2 className="h-5 w-5 shrink-0 text-[#006AFF]" />
             )}
           </button>
         );
@@ -113,7 +85,6 @@ export function MultiSelectCards({ options, value, onChange, helpText }: MultiSe
       <div className="grid gap-3 sm:grid-cols-2" role="group">
         {options.map((option) => {
           const isSelected = selected.includes(option.value);
-          const meta = getCardMeta(option.value, option.label);
           return (
             <button
               key={option.value}
@@ -121,7 +92,7 @@ export function MultiSelectCards({ options, value, onChange, helpText }: MultiSe
               aria-pressed={isSelected}
               onClick={() => toggle(option.value)}
               className={cn(
-                "group relative flex min-h-[68px] cursor-pointer items-center gap-4 rounded-2xl border p-4 text-left shadow-sm transition-all duration-200",
+                "group relative flex min-h-[68px] cursor-pointer items-center rounded-2xl border p-4 text-left shadow-sm transition-all duration-200",
                 "hover:-translate-y-0.5 hover:shadow-md",
                 "focus:outline-none focus:ring-2 focus:ring-[#006AFF]/30",
                 isSelected
@@ -129,9 +100,6 @@ export function MultiSelectCards({ options, value, onChange, helpText }: MultiSe
                   : "border-slate-200 bg-white hover:border-[#006AFF]/40 hover:bg-[#fafcff]"
               )}
             >
-              <span className="text-xl leading-none" aria-hidden="true">
-                {meta.icon}
-              </span>
               <span className="flex-1 font-medium text-slate-900">{option.label}</span>
               {isSelected && (
                 <CheckCircle2 className="h-5 w-5 shrink-0 text-[#006AFF]" />
@@ -390,20 +358,19 @@ export function IncomeRangeSelector({ value, onChange }: IncomeRangeSelectorProp
             aria-checked={selected}
             onClick={() => onChange(range.value)}
             className={cn(
-              "relative flex min-h-[80px] cursor-pointer items-start gap-3 rounded-2xl border p-4 text-left shadow-sm transition-all duration-200",
+              "relative flex min-h-[80px] cursor-pointer items-center rounded-2xl border p-4 text-left shadow-sm transition-all duration-200",
               "hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#006AFF]/30",
               selected
                 ? "border-[#006AFF] bg-[#f0f7ff] shadow-md"
                 : "border-slate-200 bg-white hover:border-[#006AFF]/40 hover:bg-[#fafcff]"
             )}
           >
-            <span className="mt-0.5 text-xl leading-none" aria-hidden="true">{range.icon}</span>
-            <div>
+            <div className="flex-1">
               <div className="font-semibold text-slate-900">{range.label}</div>
               <div className="mt-0.5 text-xs text-slate-500">{range.description}</div>
             </div>
             {selected && (
-              <CheckCircle2 className="absolute right-3 top-3 h-4 w-4 text-[#006AFF]" />
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-[#006AFF]" />
             )}
           </button>
         );
@@ -422,9 +389,9 @@ interface BooleanCardsProps {
 }
 
 const BOOL_OPTIONS = [
-  { value: "true", label: "Yes", icon: "✅" },
-  { value: "false", label: "No", icon: "❌" },
-  { value: "not_sure", label: "Not sure", icon: "🤔" }
+  { value: "true", label: "Yes" },
+  { value: "false", label: "No" },
+  { value: "not_sure", label: "Not sure" }
 ];
 
 export function BooleanCards({ value, onChange }: BooleanCardsProps) {
@@ -440,14 +407,13 @@ export function BooleanCards({ value, onChange }: BooleanCardsProps) {
             aria-checked={selected}
             onClick={() => onChange(option.value)}
             className={cn(
-              "flex min-h-[80px] flex-col items-center justify-center gap-2 rounded-2xl border p-4 text-center shadow-sm transition-all duration-200",
+              "flex min-h-[80px] items-center justify-center rounded-2xl border p-4 text-center shadow-sm transition-all duration-200",
               "hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#006AFF]/30",
               selected
                 ? "border-[#006AFF] bg-[#f0f7ff] shadow-md"
                 : "border-slate-200 bg-white hover:border-[#006AFF]/40 hover:bg-[#fafcff]"
             )}
           >
-            <span className="text-2xl leading-none" aria-hidden="true">{option.icon}</span>
             <span className={cn("text-sm font-semibold", selected ? "text-[#006AFF]" : "text-slate-700")}>
               {option.label}
             </span>

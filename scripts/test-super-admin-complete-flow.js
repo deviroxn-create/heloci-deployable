@@ -103,7 +103,7 @@ async function testCompleteFlow() {
     console.log("═".repeat(70));
     console.log("\nLogin with:");
     console.log("  Email: superadmin@heloci.platform");
-    console.log("  Password: Super1234!");
+    console.log("  Password: configured through environment");
     console.log("\nExpected flow:");
     console.log("  1. ✅ Supabase authentication succeeds");
     console.log("  2. ✅ Session detects SUPER_ADMIN role");

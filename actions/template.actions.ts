@@ -174,13 +174,15 @@ export async function searchTemplatesAction(
   if (!user) throw new Error("UNAUTHORIZED");
 
   const scope = resolveCommunicationScope(user, selectedOrgId);
+  const operationOrganizationId = getOperationOrganizationId(scope);
 
   const skip = (page - 1) * pageSize;
 
   // Build filter
   const where: any = {
     active: true,
-    channel: { in: ["email", "internal_message"] }
+    channel: { in: ["email", "internal_message"] },
+    ...(operationOrganizationId ? { AND: [{ OR: [{ organizationId: operationOrganizationId }, { organizationId: null }] }] } : {})
   };
 
   if (status !== "ALL") {
@@ -193,12 +195,12 @@ export async function searchTemplatesAction(
   }
 
   if (query.trim()) {
-    where.OR = [
+    where.AND = [...(where.AND || []), { OR: [
       { name: { contains: query, mode: "insensitive" } },
       { plainText: { contains: query, mode: "insensitive" } },
       { subject: { contains: query, mode: "insensitive" } },
       { title: { contains: query, mode: "insensitive" } }
-    ];
+    ] }];
   }
 
   // Execute search
@@ -245,8 +247,9 @@ export async function getTemplateAction(templateId: string, selectedOrgId?: stri
   if (!user) throw new Error("UNAUTHORIZED");
 
   const scope = resolveCommunicationScope(user, selectedOrgId);
+  const operationOrganizationId = getOperationOrganizationId(scope);
 
-  const template = await getTemplateById(templateId);
+  const template = await getTemplateById(templateId, operationOrganizationId ?? undefined);
 
   if (!template) throw new Error("Template not found");
 
@@ -314,7 +317,8 @@ export async function saveTemplateAction(input: {
       channel,
       status,
       variables,
-      html: buildTemplateHtml(input.body)
+      html: buildTemplateHtml(input.body),
+      organizationId: operationOrganizationId ?? undefined
     });
   }
 
@@ -327,7 +331,8 @@ export async function saveTemplateAction(input: {
     channel,
     status,
     variables,
-    html: buildTemplateHtml(input.body)
+    html: buildTemplateHtml(input.body),
+    organizationId: operationOrganizationId ?? undefined
   });
 }
 
@@ -345,7 +350,7 @@ export async function deleteTemplateAction(templateId: string, selectedOrgId?: s
     await requireOrgRole(user.id, operationOrganizationId, ["org_admin"]);
   }
 
-  return deleteTemplateRecord(templateId);
+  return deleteTemplateRecord(templateId, operationOrganizationId ?? undefined);
 }
 
 /**
@@ -359,7 +364,7 @@ export async function getFavoriteTemplatesAction(selectedOrgId?: string) {
 
   // TODO: Implement user preferences for favorites
   // For now, return most recently used templates
-  const templates = await listFavoriteTemplates(5);
+  const templates = await listFavoriteTemplates(5, getOperationOrganizationId(scope) ?? undefined);
 
   const mapCategory = (eventName: string): TemplateCategory => {
     if (eventName.includes("document")) return "document_request";
@@ -397,7 +402,7 @@ export async function getRecentTemplatesAction(selectedOrgId?: string) {
 
   // TODO: Implement usage tracking
   // For now, return most recent templates
-  const templates = await listRecentTemplates(10);
+  const templates = await listRecentTemplates(10, getOperationOrganizationId(scope) ?? undefined);
 
   const mapCategory = (eventName: string): TemplateCategory => {
     if (eventName.includes("document")) return "document_request";
@@ -473,7 +478,8 @@ export async function previewTemplateAction(
 
   const scope = resolveCommunicationScope(user, selectedOrgId);
 
-  const template = await previewTemplate(templateId);
+  const template = await previewTemplate(templateId, getOperationOrganizationId(scope) ?? undefined);
+
 
   if (!template) throw new Error("Template not found");
 
@@ -501,7 +507,7 @@ export async function publishTemplateAction(templateId: string, selectedOrgId?: 
     await requireOrgRole(user.id, operationOrganizationId, ["org_admin"]);
   }
 
-  return publishTemplateRecord(templateId);
+  return publishTemplateRecord(templateId, operationOrganizationId ?? undefined);
 }
 
 /**
@@ -518,5 +524,5 @@ export async function archiveTemplateAction(templateId: string, selectedOrgId?: 
     await requireOrgRole(user.id, operationOrganizationId, ["org_admin"]);
   }
 
-  return archiveTemplateRecord(templateId);
+  return archiveTemplateRecord(templateId, operationOrganizationId ?? undefined);
 }

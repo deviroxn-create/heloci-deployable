@@ -2,11 +2,18 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const client_1 = require("@prisma/client");
 const prisma = new client_1.PrismaClient();
+const requireEnv = (name) => {
+    const value = process.env[name];
+    if (!value) {
+        throw new Error(`Missing required environment variable: ${name}`);
+    }
+    return value;
+};
 // ─── Dev credentials ──────────────────────────────────────────────────────────
 const USERS = [
     {
         email: "superadmin@heloci.platform",
-        password: process.env.DEFAULT_ADMIN_PASSWORD ?? "Super1234!",
+        password: requireEnv("DEFAULT_ADMIN_PASSWORD"),
         name: "Platform Super Admin",
         role: "SUPER_ADMIN",
         label: "super_admin",
@@ -14,7 +21,7 @@ const USERS = [
     },
     {
         email: "admin@heloci.ngo",
-        password: process.env.DEFAULT_ADMIN_PASSWORD ?? "Admin1234!",
+        password: requireEnv("DEFAULT_ADMIN_PASSWORD"),
         name: "Heloci Admin",
         role: "ADMIN",
         label: "admin",
@@ -22,7 +29,7 @@ const USERS = [
     },
     {
         email: "staff@heloci.ngo",
-        password: "Staff1234!",
+        password: requireEnv("STAFF_DEFAULT_PASSWORD"),
         name: "Maya Thompson",
         role: "STAFF",
         label: "staff",
@@ -30,7 +37,7 @@ const USERS = [
     },
     {
         email: "reviewer@heloci.ngo",
-        password: "Reviewer1234!",
+        password: requireEnv("REVIEWER_DEFAULT_PASSWORD"),
         name: "Carlos Rodriguez",
         role: "STAFF",
         label: "reviewer",
@@ -38,7 +45,7 @@ const USERS = [
     },
     {
         email: "admin@texas.gov",
-        password: "Admin1234!",
+        password: requireEnv("TEXAS_ADMIN_DEFAULT_PASSWORD"),
         name: "Texas Admin",
         role: "ADMIN",
         label: "texas_admin",
@@ -46,7 +53,7 @@ const USERS = [
     },
     {
         email: "reviewer@texas.gov",
-        password: "Reviewer1234!",
+        password: requireEnv("TEXAS_REVIEWER_DEFAULT_PASSWORD"),
         name: "Jessica Williams",
         role: "STAFF",
         label: "texas_reviewer",
@@ -54,7 +61,7 @@ const USERS = [
     },
     {
         email: "admin@california.gov",
-        password: "Admin1234!",
+        password: requireEnv("CALIFORNIA_ADMIN_DEFAULT_PASSWORD"),
         name: "California Admin",
         role: "ADMIN",
         label: "california_admin",
@@ -62,7 +69,7 @@ const USERS = [
     },
     {
         email: "applicant@heloci.ngo",
-        password: "Applicant1234!",
+        password: requireEnv("APPLICANT_DEFAULT_PASSWORD"),
         name: "Jordan Rivera",
         role: "APPLICANT",
         label: "applicant",
@@ -88,6 +95,7 @@ const HOUSTON_PROPERTIES = [
         latitude: 29.776705,
         longitude: -95.62517,
         contactPhone: "832-769-0957",
+        imageUrl: "/images/properties/aster-on-aldine.jpg.jpg",
         availabilityCount: 19,
         specialOffers: ["Two sparkling swimming pools"],
         units: [
@@ -108,6 +116,7 @@ const HOUSTON_PROPERTIES = [
         latitude: 29.815693,
         longitude: -95.16628,
         contactPhone: "832-479-2093",
+        imageUrl: "/images/properties/novu-new-forest.jpg",
         availabilityCount: 12,
         specialOffers: ["Resort-inspired swimming pool", "Special Offer Available"],
         units: [
@@ -128,6 +137,7 @@ const HOUSTON_PROPERTIES = [
         latitude: null,
         longitude: null,
         contactPhone: "832-648-2862",
+        imageUrl: "/images/properties/the-vic-on-park-row.jpg.jpg",
         availabilityCount: 0,
         specialOffers: ["Lounge Access"],
         units: []
@@ -144,6 +154,7 @@ const HOUSTON_PROPERTIES = [
         latitude: 29.75691,
         longitude: -95.60885,
         contactPhone: "832-402-1793",
+        imageUrl: "/images/properties/the-argyle.jpg.jpg",
         availabilityCount: 8,
         specialOffers: ["Stunning swimming pool", "Special Offer Available"],
         units: [
@@ -163,6 +174,7 @@ const HOUSTON_PROPERTIES = [
         latitude: 29.704221,
         longitude: -95.51239,
         contactPhone: "832-669-6793",
+        imageUrl: "/images/properties/woodscape-apartments.jpg.jpg",
         availabilityCount: 59,
         specialOffers: ["Section 8 Vouchers Accepted"],
         units: [
@@ -182,6 +194,7 @@ const HOUSTON_PROPERTIES = [
         latitude: 29.726854,
         longitude: -95.38566,
         contactPhone: "832-979-4394",
+        imageUrl: "/images/properties/cortland-museum-district.jpg.jpg",
         availabilityCount: 33,
         specialOffers: ["Luxury finishes"],
         units: [
@@ -201,6 +214,7 @@ const HOUSTON_PROPERTIES = [
         latitude: 29.778788,
         longitude: -95.741005,
         contactPhone: "325-440-5817",
+        imageUrl: "/images/properties/seacrest-katy.jpg.jpg",
         availabilityCount: 46,
         specialOffers: ["Private patio with storage", "1 Month Free", "Valet trash"],
         units: [
@@ -221,6 +235,7 @@ const HOUSTON_PROPERTIES = [
         latitude: 29.758514,
         longitude: -95.4013,
         contactPhone: "832-900-3081",
+        imageUrl: "/images/properties/cortland-river-oaks.jpg.jpg",
         availabilityCount: 46,
         specialOffers: ["3D Tour Available", "$3,000 Off", "Deck"],
         units: [
@@ -532,6 +547,20 @@ async function main() {
                     available: p.availabilityCount > 0
                 }))
             });
+        }
+        if (p.imageUrl) {
+            const existingImage = await prisma.propertyImage.findFirst({
+                where: { propertyId: property.id, url: p.imageUrl }
+            });
+            if (!existingImage) {
+                await prisma.propertyImage.create({
+                    data: {
+                        propertyId: property.id,
+                        url: p.imageUrl,
+                        altText: `${p.title} housing exterior`
+                    }
+                });
+            }
         }
         console.log(`  ✓ ${p.title} (${p.availabilityCount} units available)`);
     }
@@ -1201,18 +1230,18 @@ async function main() {
 ├───────────────────┬─────────────────────────────┬────────────────────────┤
 │ Role              │ Email                       │ Password               │
 ├───────────────────┼─────────────────────────────┼────────────────────────┤
-│ Platform Admin    │ superadmin@heloci.platform  │ Super1234!             │
+│ Platform Admin    │ superadmin@heloci.platform  │ configured via env     │
 ├───────────────────┼─────────────────────────────┼────────────────────────┤
-│ Heloci Admin      │ admin@heloci.ngo            │ Admin1234!             │
-│ Heloci Staff      │ staff@heloci.ngo            │ Staff1234!             │
-│ Heloci Reviewer   │ reviewer@heloci.ngo         │ Reviewer1234!          │
+│ Heloci Admin      │ admin@heloci.ngo            │ configured via env     │
+│ Heloci Staff      │ staff@heloci.ngo            │ configured via env     │
+│ Heloci Reviewer   │ reviewer@heloci.ngo         │ configured via env     │
 ├───────────────────┼─────────────────────────────┼────────────────────────┤
-│ Texas Admin       │ admin@texas.gov             │ Admin1234!             │
-│ Texas Reviewer    │ reviewer@texas.gov          │ Reviewer1234!          │
+│ Texas Admin       │ admin@texas.gov             │ configured via env     │
+│ Texas Reviewer    │ reviewer@texas.gov          │ configured via env     │
 ├───────────────────┼─────────────────────────────┼────────────────────────┤
-│ California Admin  │ admin@california.gov        │ Admin1234!             │
+│ California Admin  │ admin@california.gov        │ configured via env     │
 ├───────────────────┼─────────────────────────────┼────────────────────────┤
-│ Applicant         │ applicant@heloci.ngo        │ Applicant1234!         │
+│ Applicant         │ applicant@heloci.ngo        │ configured via env     │
 └───────────────────┴─────────────────────────────┴────────────────────────┘
 
   // ─── Seed Notification Templates ───────────────────────────────────────────

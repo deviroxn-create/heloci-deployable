@@ -4,11 +4,11 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
-const SUPABASE_URL = "https://ufvmgijwozeydfxugjkw.supabase.co";
-const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVmdm1naWp3b3pleWRmeHVnamt3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0MDg3MDIsImV4cCI6MjA5Nzk4NDcwMn0.N6BA_MtnLN7sNRNjGDPiDgf7fb_pL81tvKmMtVWNbVE";
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 const SUPER_ADMIN_EMAIL = "superadmin@heloci.platform";
-const SUPER_ADMIN_PASSWORD = "Super1234!";
+const SUPER_ADMIN_PASSWORD = process.env.DEFAULT_ADMIN_PASSWORD;
 
 let passCount = 0;
 let failCount = 0;

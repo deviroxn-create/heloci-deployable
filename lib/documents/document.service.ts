@@ -28,7 +28,10 @@ export async function listDocumentsForUser(userId: string): Promise<UserDocument
     },
   });
 
-  return documents;
+  return documents.map((document) => ({
+    ...document,
+    fileUrl: documentStorageService.getViewUrl(document.fileUrl, document.id),
+  }));
 }
 
 export async function getDocumentForUser(documentId: string, userId: string) {
@@ -127,7 +130,7 @@ export async function uploadDocumentForApplication(input: {
   return {
     id: document.id,
     fileName: document.fileName,
-    fileUrl: document.fileUrl,
+    fileUrl: documentStorageService.getViewUrl(document.fileUrl, document.id),
     type: document.type,
     uploadedAt: document.uploadedAt,
     size: uploadedDoc.size,

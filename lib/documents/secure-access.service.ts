@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma/client";
-import fs from "fs/promises";
-import path from "path";
+import { documentStorageService } from "@/lib/documents/storage.service";
 
 /**
  * Secure Document Access Service
@@ -33,6 +32,7 @@ export interface FileIntegrityCheck {
   sizeMatch: boolean;
   readable: boolean;
   path: string;
+  data?: Buffer;
   actualSize: number;
   expectedSize: number;
 }
@@ -180,52 +180,30 @@ export async function validateDocumentAccess(
 }
 
 /**
- * Verify file integrity before serving
- * 
- * Checks:
- * - File exists on disk
- * - File size matches database
- * - File is readable
+ * Download and verify a private storage object before serving.
  */
 export async function verifyFileIntegrity(
   fileUrl: string,
   expectedSize?: number
 ): Promise<FileIntegrityCheck> {
   try {
-    // Convert file URL to local path safely
-    const uploadsDir = path.resolve(process.cwd(), "public", "uploads", "documents");
-    const normalizedFileUrl = fileUrl.replace(/\\/g, "/").replace(/^\//, "");
-    const strippedFileUrl = normalizedFileUrl.replace(/^uploads\/documents\//i, "");
-    const filePath = path.resolve(uploadsDir, strippedFileUrl);
-
-    if (!filePath.startsWith(uploadsDir + path.sep) && filePath !== uploadsDir) {
-      throw new Error("Invalid file path");
+    const objectKey = documentStorageService.getObjectKey(fileUrl);
+    if (!objectKey) {
+      throw new Error("Invalid document storage reference");
     }
 
-    // Check if file exists
-    let exists = false;
-    let actualSize = 0;
-    let readable = false;
-
-    try {
-      const stats = await fs.stat(filePath);
-      exists = stats.isFile();
-      actualSize = stats.size;
-      readable = true;
-    } catch (error) {
-      // File doesn't exist or not accessible
-      exists = false;
-    }
-
+    const data = await documentStorageService.download(fileUrl);
+    const actualSize = data.length;
     const sizeMatch = expectedSize ? actualSize === expectedSize : true;
 
     return {
-      exists,
+      exists: true,
       sizeMatch,
-      readable,
-      path: filePath,
+      readable: true,
+      path: objectKey,
       actualSize,
       expectedSize: expectedSize || 0,
+      data,
     };
   } catch (error: any) {
     console.error("Error verifying file integrity:", error);

@@ -17,7 +17,7 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SUPABASE_ANON_KEY) {
 }
 
 const TEST_EMAIL = 'superadmin@heloci.platform';
-const TEST_PASSWORD = process.env.DEFAULT_ADMIN_PASSWORD || 'Super1234!';
+const TEST_PASSWORD = process.env.DEFAULT_ADMIN_PASSWORD;
 
 async function test() {
   console.log('\n🔍 SUPABASE AUTH DIAGNOSTIC TEST\n');

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
+import { requireOrgRole } from "@/lib/auth/rbac";
 import { retryFailedEmail } from "@/lib/email/email.service";
 
 /**
@@ -26,6 +27,8 @@ export async function POST(
         { status: 400 }
       );
     }
+
+    await requireOrgRole(user.id, organizationId, ["org_admin", "manager", "reviewer", "case_worker", "document_officer"]);
 
     const result = await retryFailedEmail(id, user.id, organizationId);
 

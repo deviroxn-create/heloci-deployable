@@ -75,7 +75,7 @@ export default function DynamicForm({ pages, applicationId, initialPage = 0, onC
         throw new Error(result.error || "Unable to submit application.");
       }
       onComplete?.();
-      router.push("/dashboard");
+      router.push("/applicant/dashboard");
     } catch (error) {
       setMessage((error as Error).message);
     } finally {

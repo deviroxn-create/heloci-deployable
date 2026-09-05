@@ -31,9 +31,11 @@ export async function GET(
 
   } catch (error: any) {
     console.error("Error fetching document history:", error);
+    const message = error instanceof Error ? error.message : "";
+    const status = message === "Unauthorized" ? 403 : message === "Document not found" ? 404 : 500;
     return NextResponse.json(
-      { error: error.message || "Failed to fetch document history" },
-      { status: 500 }
+      { error: status === 403 ? "Unauthorized" : status === 404 ? "Document not found" : "Failed to fetch document history" },
+      { status }
     );
   }
 }

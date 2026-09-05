@@ -1,11 +1,11 @@
 // TRACE EXECUTION PATH: Super Admin Login Flow
 // Tests EVERY step from login form to dashboard
 
-const SUPABASE_URL = "https://ufvmgijwozeydfxugjkw.supabase.co";
-const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVmdm1naWp3b3pleWRmeHVnamt3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0MDg3MDIsImV4cCI6MjA5Nzk4NDcwMn0.N6BA_MtnLN7sNRNjGDPiDgf7fb_pL81tvKmMtVWNbVE";
-const SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVmdm1naWp3b3pleWRmeHVnamt3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjQwODcwMiwiZXhwIjoyMDk3OTg0NzAyfQ.zRksBENZIpLQtdjvGL7Wej0icNBgeu89YMa7MdCOuCc";
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const EMAIL = "superadmin@heloci.platform";
-const PASSWORD = "Super1234!";
+const PASSWORD = process.env.DEFAULT_ADMIN_PASSWORD;
 
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();

@@ -29,12 +29,14 @@ interface MatchItem {
   programId: string;
   programName: string;
   programSlug: string;
-  score: number;
+  score?: number;
   isEligible: boolean;
 }
 
 interface CompletionSummaryProps {
   answers: Record<string, unknown>;
+  initialMatches?: MatchItem[];
+  isGuest?: boolean;
   onViewMatches: () => void;
   onSaveAndExit: () => void;
 }
@@ -109,14 +111,17 @@ const GOAL_LABELS: Record<string, string> = {
 
 export function CompletionSummary({
   answers,
+  initialMatches,
+  isGuest = false,
   onViewMatches,
   onSaveAndExit,
 }: CompletionSummaryProps) {
-  const [matches, setMatches] = useState<MatchItem[]>([]);
-  const [loadingMatches, setLoadingMatches] = useState(true);
+  const [matches, setMatches] = useState<MatchItem[]>(initialMatches ?? []);
+  const [loadingMatches, setLoadingMatches] = useState(!initialMatches);
   const snapshot = buildSnapshot(answers);
 
   useEffect(() => {
+    if (initialMatches) return;
     void fetch("/api/matches")
       .then((r) => r.json())
       .then((data) => {
@@ -127,7 +132,7 @@ export function CompletionSummary({
       })
       .catch(() => setMatches([]))
       .finally(() => setLoadingMatches(false));
-  }, []);
+  }, [initialMatches]);
 
   const goalLabels =
     snapshot.housingGoals
@@ -278,7 +283,7 @@ export function CompletionSummary({
           </div>
         ) : matches.length === 0 ? (
           <p className="text-sm text-slate-500">
-            No matches yet. Complete your profile to unlock recommendations.
+            No matches yet. Complete more questions to improve your recommendations.
           </p>
         ) : (
           <ul className="space-y-3">
@@ -323,14 +328,14 @@ export function CompletionSummary({
           className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-6 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#006AFF]/30"
         >
           <Bookmark className="h-4 w-4" />
-          Save to profile
+          {isGuest ? "Create an account to save" : "Save to profile"}
         </button>
         <button
           type="button"
           onClick={onViewMatches}
           className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full bg-[#006AFF] px-8 text-base font-semibold text-white shadow-md shadow-[#006AFF]/25 transition hover:bg-[#0057e6] hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-[#006AFF]/30"
         >
-          View all matches
+          {isGuest ? "Create an account to apply" : "View all matches"}
           <ArrowRight className="h-5 w-5" />
         </button>
       </div>

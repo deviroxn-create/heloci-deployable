@@ -6,7 +6,6 @@ import {
   logDocumentAccess,
   getSecurityHeaders,
 } from "@/lib/documents/secure-access.service";
-import fs from "fs/promises";
 
 /**
  * Secure Document Preview API
@@ -143,7 +142,7 @@ export async function GET(
     }
 
     // 5. Read File
-    const fileBuffer = await fs.readFile(integrityCheck.path);
+    const fileBuffer = integrityCheck.data!;
 
     // 6. Log Successful Access
     await logDocumentAccess({
@@ -165,7 +164,7 @@ export async function GET(
     );
 
     // 8. Return File with Security Headers
-    return new NextResponse(fileBuffer, {
+    return new NextResponse(new Uint8Array(fileBuffer), {
       status: 200,
       headers: {
         ...securityHeaders,

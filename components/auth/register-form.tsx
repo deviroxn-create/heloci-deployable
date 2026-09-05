@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Mail, Lock, User } from "lucide-react";
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AuthInput } from "@/components/auth/auth-input";
@@ -15,6 +16,8 @@ import type { z } from "zod";
 type RegisterValues = z.infer<typeof registerSchema>;
 
 export function RegisterForm() {
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get("redirectTo");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -69,7 +72,7 @@ export function RegisterForm() {
 
     // 3. If email confirmation is disabled, session is live — go straight to dashboard
     if (data.session) {
-      window.location.href = "/applicant/dashboard";
+      window.location.href = redirectTo?.startsWith("/") ? redirectTo : "/applicant/dashboard";
       return;
     }
 
@@ -93,8 +96,8 @@ export function RegisterForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      <div className="space-y-6">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+      <div className="space-y-5">
         <AuthInput
           label="Full name"
           type="text"
@@ -104,7 +107,7 @@ export function RegisterForm() {
           error={errors.fullName?.message}
         />
         <AuthInput
-          label="Email"
+          label="Email address"
           type="email"
           autoComplete="email"
           icon={Mail}
@@ -130,18 +133,18 @@ export function RegisterForm() {
       </div>
 
       {error ? (
-        <p className="rounded-[16px] border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">
+        <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </p>
       ) : null}
 
-      <Button type="submit" disabled={busy} className="h-14 w-full rounded-[16px] text-base font-semibold">
-        {busy ? "Creating account..." : "Create Account"}
+      <Button type="submit" disabled={busy} className="h-12 w-full rounded-full text-base font-semibold">
+        {busy ? "Creating account..." : "Create account"}
       </Button>
 
       <p className="text-center text-sm text-slate-600">
         Already have an account?{" "}
-        <Link href="/login" className="font-semibold text-brand transition hover:text-brandHover">
+        <Link href="/login" className="font-semibold text-[#006AFF] transition hover:text-[#0057e6]">
           Sign in
         </Link>
       </p>

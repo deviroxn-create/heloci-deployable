@@ -75,7 +75,7 @@ export function SiteHeader() {
             Heloci
           </Link>
 
-          <nav className="hidden items-center gap-1 text-sm font-medium text-slate-700 md:flex">
+          <nav className="hidden items-center gap-1 text-sm font-medium text-slate-700 lg:flex">
             {navItems.map((item) => (
               <Link
                 key={item.href}
@@ -125,7 +125,7 @@ export function SiteHeader() {
         </div>
 
         {/* ── Right: auth-aware actions (desktop) ── */}
-        <div className="hidden items-center gap-3 md:flex">
+        <div className="hidden items-center gap-3 lg:flex">
           {authLoading ? (
             // Skeleton placeholder while session loads
             <div className="h-9 w-40 animate-pulse rounded-full bg-slate-100" />
@@ -187,7 +187,7 @@ export function SiteHeader() {
         {/* ── Mobile hamburger ── */}
         <button
           type="button"
-          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border bg-white text-slate-700 transition hover:bg-slate-100 md:hidden"
+          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border bg-white text-slate-700 transition hover:bg-slate-100 lg:hidden"
           onClick={() => setDrawerOpen(true)}
           aria-label="Open menu"
         >
@@ -199,7 +199,7 @@ export function SiteHeader() {
       <AnimatePresence>
         {drawerOpen ? (
           <motion.div
-            className="fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-sm md:hidden"
+            className="fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-sm lg:hidden"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

@@ -330,6 +330,10 @@ export async function retryFailedEmail(
     throw new Error("NOT_AN_EMAIL");
   }
 
+  if (log.userId !== userId) {
+    throw new Error("Unauthorized");
+  }
+
   // Reset retry count and status
   await prisma.notificationLog.update({
     where: { id: emailId },

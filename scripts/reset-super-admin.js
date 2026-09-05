@@ -1,10 +1,14 @@
 // Delete and recreate Super Admin with correct password
-const SUPABASE_URL = "https://ufvmgijwozeydfxugjkw.supabase.co";
-const SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVmdm1naWp3b3pleWRmeHVnamt3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjQwODcwMiwiZXhwIjoyMDk3OTg0NzAyfQ.zRksBENZIpLQtdjvGL7Wej0icNBgeu89YMa7MdCOuCc";
-const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVmdm1naWp3b3pleWRmeHVnamt3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0MDg3MDIsImV4cCI6MjA5Nzk4NDcwMn0.N6BA_MtnLN7sNRNjGDPiDgf7fb_pL81tvKmMtVWNbVE";
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 const EMAIL = "superadmin@heloci.platform";
-const PASSWORD = "Super1234!";
+const PASSWORD = process.env.DEFAULT_ADMIN_PASSWORD;
+
+if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !ANON_KEY || !PASSWORD) {
+  throw new Error("Required Supabase and admin password environment variables are missing");
+}
 
 async function resetSuperAdmin() {
   console.log("\n🔄 RESETTING SUPER ADMIN USER\n");

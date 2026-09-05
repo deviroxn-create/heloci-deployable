@@ -58,7 +58,10 @@ export async function POST(req: Request) {
 
       return NextResponse.json({
         success: true,
-        document,
+        document: {
+          ...document,
+          fileUrl: documentStorageService.getViewUrl(document.fileUrl, document.id),
+        },
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to upload document';

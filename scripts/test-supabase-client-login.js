@@ -20,7 +20,7 @@ envContent.split('\n').forEach(line => {
 
 const SUPABASE_URL = envVars.NEXT_PUBLIC_SUPABASE_URL;
 const ANON_KEY = envVars.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const TEST_PASSWORD = envVars.DEFAULT_ADMIN_PASSWORD || 'Super1234!';
+const TEST_PASSWORD = envVars.DEFAULT_ADMIN_PASSWORD;
 
 const TEST_EMAIL = 'superadmin@heloci.platform';
 

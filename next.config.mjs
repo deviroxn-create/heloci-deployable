@@ -1,11 +1,7 @@
 const nextConfig = {
   reactStrictMode: true,
   turbopack: {},
-  images: {
-    remotePatterns: [
-      { protocol: "https", hostname: "**" }
-    ]
-  },
+  images: { remotePatterns: [] },
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {
