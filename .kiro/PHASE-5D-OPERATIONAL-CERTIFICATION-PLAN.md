@@ -24,9 +24,9 @@
 ### Environment Variables (Already Configured)
 
 ```
-RESEND_API_KEY=[REDACTED-RESEND-KEY]
+RESEND_API_KEY=<configure-in-environment>
 COMMUNICATION_SENDER_EMAIL=petkeyz8@gmail.com
-TELEGRAM_BOT_TOKEN=[REDACTED-TELEGRAM-TOKEN]
+TELEGRAM_BOT_TOKEN=<configure-in-environment>
 TELEGRAM_CHAT_ID=7060936226
 ```
 

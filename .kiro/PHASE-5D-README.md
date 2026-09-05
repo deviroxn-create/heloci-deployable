@@ -26,8 +26,8 @@ Before starting, ensure:
    DATABASE_URL=postgresql://user:password@localhost:5432/heloci
    NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
    SUPABASE_SERVICE_ROLE_KEY=your_service_key
-   RESEND_API_KEY=[REDACTED-RESEND-KEY]
-   TELEGRAM_BOT_TOKEN=[REDACTED-TELEGRAM-TOKEN]
+    RESEND_API_KEY=<configure-in-environment>
+    TELEGRAM_BOT_TOKEN=<configure-in-environment>
    ```
 3. **Dependencies**: `npm install` complete
 4. **Build**: `npm run build` succeeds (optional, dev mode doesn't require)

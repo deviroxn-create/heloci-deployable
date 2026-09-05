@@ -184,7 +184,7 @@ Exit Code: 0
 
 ### Required Settings (.env.local)
 ```
-RESEND_API_KEY=[REDACTED-RESEND-KEY]
+RESEND_API_KEY=<configure-in-environment>
 COMMUNICATION_SENDER_EMAIL=petkeyz8@gmail.com
 ```
 
