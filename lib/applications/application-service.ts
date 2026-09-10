@@ -2,7 +2,18 @@ import { prisma } from "@/lib/prisma/client";
 import { getFormForProgram } from "@/lib/forms/renderer";
 import { validatePage } from "@/lib/forms/validator";
 import { publishDomainEvent } from "@/lib/events/domain-event-publisher";
-import { queueTelegramAlert } from "@/lib/telegram/alert-service";
+import { getMissingApplicantDocuments } from "@/lib/documents/applicant-requirements";
+import { APPLICANT_IDENTITY_DOCUMENTS } from "@/lib/documents/categories";
+import { sanitizeApplicationData } from "@/lib/notifications/application-telegram-summary";
+
+export { sanitizeApplicationData } from "@/lib/notifications/application-telegram-summary";
+
+export class ApplicationValidationError extends Error {
+  constructor(public readonly errors: Record<string, string>) {
+    super("Validation failed");
+    this.name = "ApplicationValidationError";
+  }
+}
 
 export async function listApplicationsForUser(userId: string) {
   return prisma.programApplication.findMany({
@@ -122,13 +133,24 @@ function transformWizardToQuestionSet(wizardData: Record<string, unknown>): Reco
     "banking.bankName": "bankName",
     "banking.accountType": "accountType",
     "banking.routingNumber": "routingNumber",
-    "banking.accountNumber": "accountNumber",
     "banking.directDeposit": "directDeposit",
   };
 
   const transformed: Record<string, unknown> = {};
 
-  for (const [wizardKey, value] of Object.entries(wizardData)) {
+  // Accept both the wizard's flat keys and nested saved profile/draft data.
+  const nestedHousing = wizardData.housing;
+  const housing = nestedHousing && typeof nestedHousing === "object"
+    ? nestedHousing as Record<string, unknown>
+    : {};
+  const normalizedWizardData: Record<string, unknown> = {
+    ...wizardData,
+    ...(wizardData["housing.state"] === undefined && housing.state !== undefined
+      ? { "housing.state": housing.state }
+      : {}),
+  };
+
+  for (const [wizardKey, value] of Object.entries(normalizedWizardData)) {
     if (KEY_MAPPING[wizardKey]) {
       const questionSetKey = KEY_MAPPING[wizardKey];
       let normalizedValue = value;
@@ -142,7 +164,9 @@ function transformWizardToQuestionSet(wizardData: Record<string, unknown>): Reco
       transformed[questionSetKey] = normalizedValue;
       transformed[wizardKey] = value;
     } else if (!wizardKey.includes(".")) {
-      const hasNamespacedVersion = Object.values(KEY_MAPPING).includes(wizardKey);
+      const hasNamespacedVersion = Object.entries(KEY_MAPPING).some(
+        ([namespacedKey, questionSetKey]) => questionSetKey === wizardKey && normalizedWizardData[namespacedKey] !== undefined
+      );
       if (!hasNamespacedVersion) {
         transformed[wizardKey] = value;
       }
@@ -159,6 +183,12 @@ function transformWizardToQuestionSet(wizardData: Record<string, unknown>): Reco
   if (!transformed.isStudent) {
     transformed.isStudent = "false";
   }
+
+  // Remove confirmation fields from stored data (they are validation-only)
+  delete transformed["personal.ssnConfirm"];
+  delete transformed["banking.accountNumber"];
+  delete transformed["banking.accountNumberConfirm"];
+  delete transformed["banking.accountConfirm"];
 
   return transformed;
 }
@@ -196,6 +226,9 @@ export async function submitApplication(input: {
       userId: true,
       programId: true,
       data: true,
+      status: true,
+      submittedAt: true,
+      documents: { select: { type: true } },
     },
   });
 
@@ -209,62 +242,65 @@ export async function submitApplication(input: {
   });
 
   const questionSetPayload = transformWizardToQuestionSet(input.wizardPayload);
-  
-  // STEP 3: Transformation (BEFORE & AFTER)
-  console.log("\nSTEP 3: Transformation (Wizard → QuestionSet)");
-  console.log("  BEFORE (Wizard):");
-  const wizardKeys = Object.keys(input.wizardPayload);
-  console.log(`    Total keys: ${wizardKeys.length}`);
-  wizardKeys.forEach(k => {
-    const v = input.wizardPayload[k];
-    console.log(`    ${k}: ${JSON.stringify(v).substring(0, 40)} (${typeof v})`);
+
+  const missingDocuments = getMissingApplicantDocuments({
+    identityType: typeof input.wizardPayload["documents.identityType"] === "string"
+      ? input.wizardPayload["documents.identityType"] as "national_id" | "visa" | "drivers_license"
+      : undefined,
+    uploads: application.documents,
   });
+  if (missingDocuments.length > 0) {
+    throw new ApplicationValidationError({ documents: missingDocuments.join(" ") });
+  }
   
-  console.log("  AFTER (QuestionSet):");
-  const questionSetKeys = Object.keys(questionSetPayload);
-  console.log(`    Total keys: ${questionSetKeys.length}`);
-  questionSetKeys.forEach(k => {
-    const v = questionSetPayload[k];
-    console.log(`    ${k}: ${JSON.stringify(v).substring(0, 40)} (${typeof v})`);
-  });
+  // CUSTOM VALIDATION: SSN Confirmation must match
+  const ssnValue = input.wizardPayload["personal.ssn"];
+  const ssnConfirmValue = input.wizardPayload["personal.ssnConfirm"];
   
-  console.log("\n  Key Mapping Analysis:");
-  const droppedKeys = wizardKeys.filter(k => !questionSetKeys.includes(k) && !questionSetKeys.includes(k.split('.')[1]));
-  if (droppedKeys.length > 0) {
-    console.log(`    Dropped keys: ${droppedKeys.slice(0, 10).join(', ')}`);
+  if (ssnValue && ssnConfirmValue && ssnValue !== ssnConfirmValue) {
+    throw new Error("Social Security Numbers do not match. Please verify and re-enter.");
+  }
+  
+  // CUSTOM VALIDATION: Phone numbers must be valid 10-digit US format if provided
+  const phoneValue = input.wizardPayload["personal.phone"];
+  if (phoneValue && String(phoneValue).replace(/\D/g, '').length !== 10) {
+    throw new Error("Primary phone number must be a valid 10-digit US phone number.");
+  }
+  
+  const secondaryPhoneValue = input.wizardPayload["personal.secondaryPhone"];
+  if (secondaryPhoneValue && String(secondaryPhoneValue).replace(/\D/g, '').length !== 10 && String(secondaryPhoneValue).trim() !== "") {
+    throw new Error("Secondary phone number must be a valid 10-digit US phone number.");
+  }
+  
+  // CUSTOM VALIDATION: Landlord phone must be valid if provided
+  const landlordPhoneValue = input.wizardPayload["housing.landlordPhone"];
+  if (landlordPhoneValue && String(landlordPhoneValue).trim() !== '' && String(landlordPhoneValue).replace(/\D/g, '').length !== 10) {
+    throw new Error("Landlord phone number must be a valid 10-digit US phone number.");
+  }
+  
+  // CUSTOM VALIDATION: DOB cannot be in future or represent someone younger than 15
+  const dobValue = input.wizardPayload["personal.dateOfBirth"];
+  if (dobValue) {
+    const dob = new Date(String(dobValue));
+    const today = new Date();
+    
+    if (dob > today) {
+      throw new Error("Date of birth cannot be in the future.");
+    }
+    
+    const age = Math.floor((today.getTime() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+    if (age < 15) {
+      throw new Error("Applicant must be at least 15 years old.");
+    }
   }
   
   const form = await getFormForProgram(program?.slug ?? "", input.userId);
   const allQuestions = (form.pages ?? []).flatMap((page: any) => page.questions);
   
-  // STEP 4: Question Set
-  console.log("\nSTEP 4: Question Set (From getFormForProgram)");
-  console.log(`  Program: ${program?.slug}`);
-  console.log(`  Total Questions: ${allQuestions.length}`);
-  allQuestions.forEach(q => {
-    console.log(`    ${q.key}: Required=${q.required} Type=${q.type}`);
-  });
-  
   const validation = validatePage(allQuestions, questionSetPayload);
-
-  // STEP 5: Validator
-  console.log("\nSTEP 5: Validator Input & Result");
-  console.log(`  Payload Keys: ${Object.keys(questionSetPayload).join(', ')}`);
-  console.log(`  Schema Keys: ${allQuestions.map(q => q.key).join(', ')}`);
   
   if (!validation.valid) {
-    console.log(`  Validation Result: FAILED`);
-    console.log(`  Errors:`);
-    for (const [field, error] of Object.entries(validation.errors)) {
-      const value = questionSetPayload[field];
-      console.log(`    Field: ${field}`);
-      console.log(`    Expected: ${allQuestions.find(q => q.key === field)?.required ? 'REQUIRED' : 'OPTIONAL'}`);
-      console.log(`    Received: ${value !== undefined ? JSON.stringify(value) : 'MISSING'}`);
-      console.log(`    Message: ${error}`);
-    }
-    throw new Error("Validation failed");
-  } else {
-    console.log(`  Validation Result: PASSED`);
+    throw new ApplicationValidationError(validation.errors);
   }
 
   await prisma.programApplication.update({
@@ -294,24 +330,7 @@ export async function submitApplication(input: {
     console.error("Failed to load application user for notifications", error);
   }
 
-  if (userEmail) {
-    console.log("📬 [Notification] Application submitted event publishing:", {
-      actor: { id: input.userId, name: "current_user" },
-      application: { id: application.id, ownerId: application.userId },
-      recipient: { userId: application.userId, email: userEmail, name: userName },
-      template: "application.submitted",
-      organizationId: program?.organizationId
-    });
-    
-    publishDomainEvent("application.submitted", {
-      userId: application.userId,        // ← Application owner's ID (not current user)
-      email: userEmail,
-      name: userName,
-      applicationId: application.id,
-      programId: application.programId,
-      organizationId: program?.organizationId ?? undefined,
-    });
-  } else {
+  if (!userEmail) {
     console.error("Application submitted notification skipped: applicant email unavailable", {
       applicationId: application.id,
       userId: input.userId,
@@ -326,11 +345,20 @@ export async function submitApplication(input: {
     });
 
     const appData = questionSetPayload as Record<string, unknown>;
+    const uploadedTypes = new Set(application.documents.map((document) => document.type));
+    const identityType = typeof input.wizardPayload["documents.identityType"] === "string"
+      ? input.wizardPayload["documents.identityType"]
+      : undefined;
+    const identity = identityType && identityType in APPLICANT_IDENTITY_DOCUMENTS
+      ? APPLICANT_IDENTITY_DOCUMENTS[identityType as keyof typeof APPLICANT_IDENTITY_DOCUMENTS]
+      : undefined;
+    const ssnDigits = String(input.wizardPayload["personal.ssn"] ?? "").replace(/\D/g, "");
     const summary = {
       applicationId: application.id,
       programName: program?.name,
       applicantName: user?.name,
       applicantEmail: user?.email,
+      status: "submitted",
       submittedAt: new Date().toISOString(),
       personal: {
         name: `${appData.firstName || ""} ${appData.lastName || ""}`.trim(),
@@ -373,24 +401,40 @@ export async function submitApplication(input: {
       },
       financial: {
         assets: appData.assets,
-        checkingBalance: appData.checkingBalance,
-        savingsBalance: appData.savingsBalance,
       },
       banking: {
-        bankName: appData.bankName,
-        accountType: appData.accountType,
+        routingNumber: appData.routingNumber ? "Provided" : "Not provided",
         directDeposit: appData["banking.prefersDirectDeposit"],
       },
+      documents: {
+        identity: identity
+          ? `${identity.label} - Front ${uploadedTypes.has(identity.frontId) ? "provided" : "missing"} - Back ${uploadedTypes.has(identity.backId) ? "provided" : "missing"}`
+          : "Not selected",
+        utilityBill: uploadedTypes.has("utility_bill") ? "Provided - Optional" : "Not provided - Optional",
+        income: uploadedTypes.has("w2") ? "W-2 - Optional" : uploadedTypes.has("ein_documentation") ? "EIN documentation - Optional" : "Not provided - Optional",
+      },
+      sensitive: {
+        ssn: ssnDigits.length >= 4 ? `***-**-${ssnDigits.slice(-4)}` : "Not provided",
+        routingNumber: appData.routingNumber ? "Provided" : "Not provided",
+      },
+      applicationData: Object.entries(sanitizeApplicationData(questionSetPayload) as Record<string, unknown>)
+        .filter(([key]) => !key.toLowerCase().includes("fileurl") && !key.toLowerCase().includes("token"))
+        .map(([key, value]) => `${key}: ${typeof value === "object" ? JSON.stringify(value) : String(value ?? "Not provided")}`)
+        .join("\n"),
     };
 
-    await queueTelegramAlert({
-      type: "submitted",
-      level: "INFO",
-      organizationId: program?.organizationId ?? undefined,
-      data: summary,
-    });
+    if (userEmail) {
+      publishDomainEvent("application.submitted", {
+        userId: application.userId,
+        email: userEmail,
+        name: userName,
+        programId: application.programId,
+        organizationId: program?.organizationId ?? undefined,
+        ...summary,
+      });
+    }
   } catch (error) {
-    console.error("queueTelegramAlert failed", error);
+    console.error("Application submitted notification failed", error);
   }
 
   return { success: true };

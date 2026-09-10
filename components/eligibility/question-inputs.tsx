@@ -336,8 +336,7 @@ const INCOME_RANGES = [
   { value: "3000_5000", label: "$3,000 – $5,000", icon: "💵", description: "Moderate income" },
   { value: "5000_8000", label: "$5,000 – $8,000", icon: "💵💵", description: "Lower-middle income" },
   { value: "8000_15000", label: "$8,000 – $15,000", icon: "💵💵", description: "Middle income" },
-  { value: "15000_plus", label: "$15,000+", icon: "💵💵💵", description: "Higher income" },
-  { value: "prefer_not_to_say", label: "Prefer not to say", icon: "🤐", description: "Skip this question" }
+  { value: "15000_plus", label: "$15,000+", icon: "💵💵💵", description: "Higher income" }
 ];
 
 interface IncomeRangeSelectorProps {
@@ -390,13 +389,12 @@ interface BooleanCardsProps {
 
 const BOOL_OPTIONS = [
   { value: "true", label: "Yes" },
-  { value: "false", label: "No" },
-  { value: "not_sure", label: "Not sure" }
+  { value: "false", label: "No" }
 ];
 
 export function BooleanCards({ value, onChange }: BooleanCardsProps) {
   return (
-    <div className="grid grid-cols-3 gap-3" role="radiogroup">
+    <div className="grid grid-cols-2 gap-3" role="radiogroup">
       {BOOL_OPTIONS.map((option) => {
         const selected = String(value ?? "") === option.value;
         return (
@@ -617,5 +615,239 @@ export function QuestionRenderer({ question, value, onChange }: QuestionRenderer
       onChange={(v) => onChange(v)}
       placeholder={helpText}
     />
+  );
+}
+
+/* ─────────────────────────────────────────────
+   Phone Input (US-formatted with validation)
+───────────────────────────────────────────── */
+
+import { validateAndFormatPhone, formatPhoneForDisplay } from "@/lib/validation/phone";
+import { validateSSN, formatSSNForDisplay, maskSSNForDisplay, doSSNsMatch } from "@/lib/validation/ssn";
+
+interface PhoneInputProps {
+  value: unknown;
+  onChange: (value: string) => void;
+  onFormatted?: (formattedValue: string) => void;
+  placeholder?: string;
+  required?: boolean;
+}
+
+export function PhoneInput({ 
+  value, 
+  onChange, 
+  onFormatted,
+  placeholder = "(555) 000-0000",
+  required = false
+}: PhoneInputProps) {
+  const stringValue = String(value ?? "");
+  const validation = validateAndFormatPhone(stringValue);
+  const displayValue = stringValue ? formatPhoneForDisplay(stringValue) : "";
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const input = e.target.value;
+    // Store only digits internally
+    const digitsOnly = input.replace(/\D/g, "").slice(0, 10);
+    onChange(digitsOnly);
+    
+    // Emit formatted version for display purposes
+    if (digitsOnly && digitsOnly.length === 10) {
+      onFormatted?.(formatPhoneForDisplay(digitsOnly));
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="relative">
+        <input
+          type="tel"
+          value={displayValue}
+          onChange={handleChange}
+          placeholder={placeholder}
+          inputMode="tel"
+          className={cn(
+            "w-full rounded-2xl border-2 bg-white px-4 py-3.5 text-slate-900 shadow-sm transition placeholder:text-slate-400 focus:outline-none focus:ring-2",
+            validation.isValid && stringValue
+              ? "border-green-300 focus:border-green-500 focus:ring-green-500/30"
+              : stringValue
+              ? "border-red-300 focus:border-red-500 focus:ring-red-500/30"
+              : "border-slate-300 focus:border-[#006AFF] focus:ring-[#006AFF]/30"
+          )}
+          required={required}
+          aria-invalid={!validation.isValid && !!stringValue}
+          aria-describedby={validation.errorMessage ? "phone-error" : undefined}
+          aria-label="US phone number (10 digits)"
+        />
+      </div>
+      
+      {validation.errorMessage && stringValue && (
+        <p id="phone-error" className="text-xs font-medium text-red-700 bg-red-50 p-2 rounded">
+          {validation.errorMessage}
+        </p>
+      )}
+      
+      {validation.isValid && stringValue && (
+        <p className="text-xs font-medium text-green-700 bg-green-50 p-2 rounded">
+          ✓ Phone number is valid
+        </p>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   SSN Input (9 digits, formatted XXX-XX-XXXX)
+───────────────────────────────────────────── */
+
+interface SSNInputProps {
+  value: unknown;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  required?: boolean;
+}
+
+export function SSNInput({ 
+  value,
+  onChange,
+  placeholder = "000-00-0000",
+  required = false
+}: SSNInputProps) {
+  const stringValue = String(value ?? "");
+  const validation = validateSSN(stringValue);
+  const digits = stringValue.replace(/\D/g, "").slice(0, 9);
+
+  return (
+    <div className="space-y-2">
+      <div className="relative">
+        <input
+          type="password"
+          value={digits}
+          onChange={(e) => {
+            const nextDigits = e.target.value.replace(/\D/g, "").slice(0, 9);
+            onChange(nextDigits);
+          }}
+          placeholder="Enter your SSN"
+          inputMode="numeric"
+          maxLength={9}
+          className={cn(
+            "w-full rounded-2xl border-2 bg-white px-4 py-3.5 text-slate-900 font-mono shadow-sm transition placeholder:text-slate-500 focus:outline-none focus:ring-2",
+            validation.isValid && validation.digitCount === 9
+              ? "border-green-300 focus:border-green-500 focus:ring-green-500/30"
+              : stringValue
+              ? "border-red-300 focus:border-red-500 focus:ring-red-500/30"
+              : "border-slate-300 focus:border-[#006AFF] focus:ring-[#006AFF]/30"
+          )}
+          required={required}
+          aria-invalid={!validation.isValid && !!stringValue}
+          aria-describedby={validation.errorMessage ? "ssn-error" : undefined}
+          aria-label="Social Security Number (9 digits, last four visible)"
+        />
+      </div>
+      
+      {validation.errorMessage && stringValue && (
+        <p id="ssn-error" className="text-xs font-medium text-red-700 bg-red-50 p-2 rounded">
+          {validation.errorMessage}
+        </p>
+      )}
+
+      {digits.length >= 4 && (
+        <p className="text-xs font-medium text-slate-600">Last four digits: •••••{digits.slice(-4)}</p>
+      )}
+      
+      {validation.isValid && validation.digitCount === 9 && (
+        <p className="text-xs font-medium text-green-700 bg-green-50 p-2 rounded">
+          ✓ SSN is valid (9 digits)
+        </p>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   Date of Birth Input (with age validation)
+───────────────────────────────────────────── */
+
+interface DateOfBirthInputProps {
+  value: string;
+  onChange: (value: string) => void;
+  minAge?: number;
+  required?: boolean;
+}
+
+export function DateOfBirthInput({
+  value,
+  onChange,
+  minAge = 15,
+  required = false
+}: DateOfBirthInputProps) {
+  const today = new Date();
+  const maxDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const minDate = new Date(today.getFullYear() - 120, today.getMonth(), today.getDate());
+  const minAgeDate = new Date(today.getFullYear() - minAge, today.getMonth(), today.getDate());
+
+  const maxDateString = maxDate.toISOString().split('T')[0];
+  const minDateString = minDate.toISOString().split('T')[0];
+
+  function validateDOB(dateString: string): { isValid: boolean; errorMessage?: string } {
+    if (!dateString) {
+      return { isValid: false, errorMessage: "Date of birth is required" };
+    }
+
+    const dob = new Date(dateString);
+    
+    if (dob > maxDate) {
+      return { isValid: false, errorMessage: "Date of birth cannot be in the future" };
+    }
+
+    if (dob < minDate) {
+      return { isValid: false, errorMessage: "Date of birth is not valid" };
+    }
+
+    const age = Math.floor((maxDate.getTime() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+    
+    if (age < minAge) {
+      return { isValid: false, errorMessage: `You must be at least ${minAge} years old` };
+    }
+
+    return { isValid: true };
+  }
+
+  const validation = validateDOB(value);
+  const showError = !validation.isValid && !!value;
+
+  return (
+    <div className="space-y-2">
+      <input
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        min={minDateString}
+        max={maxDateString}
+        className={cn(
+          "w-full rounded-2xl border-2 bg-white px-4 py-3.5 text-slate-900 shadow-sm transition focus:outline-none focus:ring-2",
+          validation.isValid && value
+            ? "border-green-300 focus:border-green-500 focus:ring-green-500/30"
+            : value
+            ? "border-red-300 focus:border-red-500 focus:ring-red-500/30"
+            : "border-slate-300 focus:border-[#006AFF] focus:ring-[#006AFF]/30"
+        )}
+        required={required}
+        aria-invalid={showError}
+        aria-describedby={showError ? "dob-error" : undefined}
+        aria-label={`Date of birth (must be at least ${minAge} years old)`}
+      />
+      
+      {showError && validation.errorMessage && (
+        <p id="dob-error" className="text-xs font-medium text-red-700 bg-red-50 p-2 rounded">
+          {validation.errorMessage}
+        </p>
+      )}
+      
+      {validation.isValid && value && (
+        <p className="text-xs font-medium text-green-700 bg-green-50 p-2 rounded">
+          ✓ Date of birth is valid
+        </p>
+      )}
+    </div>
   );
 }

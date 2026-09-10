@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { WizardShell, type WizardSection } from "@/components/application/wizard-shell";
 import {
@@ -9,14 +9,14 @@ import {
   EmploymentSection,
   IncomeSection,
   FinancialSection,
-  BankingSection,
   HousingHistorySection,
   HousingNeedsSection,
   ProgramQuestionsSection,
-  DocumentsSection,
   ReviewSection,
   type WizardData,
 } from "@/components/application/wizard-sections";
+import { ApplicantDocumentsSection } from "@/components/application/applicant-documents-section";
+import { getMissingApplicantDocuments } from "@/lib/documents/applicant-requirements";
 import type { RenderedQuestion } from "@/lib/forms/renderer";
 import { supabase } from "@/lib/supabase/client";
 
@@ -27,7 +27,6 @@ const STATIC_SECTIONS: WizardSection[] = [
   { id: "employment",      label: "Employment" },
   { id: "income",          label: "Income" },
   { id: "financial",       label: "Financial Information" },
-  { id: "banking",         label: "Banking" },
   { id: "housing-history", label: "Housing History" },
   { id: "housing-needs",   label: "Housing Needs" },
   { id: "program-questions", label: "Program Questions" },
@@ -58,13 +57,6 @@ interface ProgramInfo {
   slug: string;
   requiredDocuments: unknown;
   organization?: { name: string } | null;
-}
-
-interface DocumentRequest {
-  id: string;
-  documentType: string;
-  status: string;
-  fileUrl?: string | null;
 }
 
 /* ─── Required fields per section ───────────────────────────── */
@@ -106,18 +98,6 @@ function sectionIsValid(sectionId: string, data: WizardData): boolean {
   if (sectionId === "financial") {
     return Boolean(data["financial.assets"] && Array.isArray(data["financial.assets"]) && data["financial.assets"].length > 0);
   }
-  if (sectionId === "banking") {
-    const accountsMatch = data["banking.accountNumber"] === data["banking.accountNumberConfirm"];
-    return Boolean(
-      data["banking.bankName"] &&
-      data["banking.accountType"] &&
-      data["banking.routingNumber"] &&
-      String(data["banking.routingNumber"]).length === 9 &&
-      data["banking.accountNumber"] &&
-      data["banking.accountNumberConfirm"] &&
-      accountsMatch
-    );
-  }
   if (sectionId === "housing-history") {
     const situation = data["housing.currentHousingSituation"];
     const needsAddress = situation !== "homeless" && situation !== "vehicle" && situation !== "shelter";
@@ -134,6 +114,13 @@ function sectionIsValid(sectionId: string, data: WizardData): boolean {
     }
     return Boolean(situation);
   }
+  if (sectionId === "documents") {
+    const missing = getMissingApplicantDocuments({
+      identityType: typeof data["documents.identityType"] === "string" ? data["documents.identityType"] as "national_id" | "visa" | "drivers_license" : undefined,
+      uploads: Array.isArray(data["_uploadedDocuments"]) ? data["_uploadedDocuments"] as Array<{ type: string }> : [],
+    });
+    return missing.length === 0;
+  }
   return true; // all other sections are optional / advisory
 }
 
@@ -147,7 +134,6 @@ export default function ApplyPage() {
   const [program, setProgram] = useState<ProgramInfo | null>(null);
   const [programQuestions, setProgramQuestions] = useState<RenderedQuestion[]>([]);
   const [applicationId, setApplicationId] = useState<string>("");
-  const [docRequests, setDocRequests] = useState<DocumentRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -199,7 +185,7 @@ export default function ApplyPage() {
           const defaults: WizardData = {};
           const p = profile as Record<string, Record<string, unknown>>;
           
-          // Personal information
+          // Personal information (prefilled from profile and eligibility)
           if (p.personal?.firstName)      defaults["personal.firstName"]       = p.personal.firstName;
           if (p.personal?.middleName)     defaults["personal.middleName"]      = p.personal.middleName;
           if (p.personal?.lastName)       defaults["personal.lastName"]        = p.personal.lastName;
@@ -209,7 +195,6 @@ export default function ApplyPage() {
           if (p.personal?.secondaryPhone) defaults["personal.secondaryPhone"]  = p.personal.secondaryPhone;
           if (p.personal?.email)          defaults["personal.email"]           = p.personal.email;
           if (p.personal?.dateOfBirth)    defaults["personal.dateOfBirth"]     = p.personal.dateOfBirth;
-          if (p.personal?.ssn)            defaults["personal.ssn"]             = p.personal.ssn;
           if (p.personal?.driverLicense)  defaults["personal.driverLicense"]   = p.personal.driverLicense;
           if (p.personal?.dlState)        defaults["personal.dlState"]         = p.personal.dlState;
           if (p.personal?.citizenshipStatus) defaults["personal.citizenshipStatus"] = p.personal.citizenshipStatus;
@@ -217,7 +202,7 @@ export default function ApplyPage() {
           if (p.personal?.isVeteran !== undefined) defaults["personal.isVeteran"] = String(p.personal.isVeteran);
           if (p.personal?.isDisabilityAffected !== undefined) defaults["personal.isDisabilityAffected"] = String(p.personal.isDisabilityAffected);
           
-          // Household information
+          // Household information (prefilled from profile and eligibility)
           if (p.household?.householdSize) defaults["household.householdSize"] = p.household.householdSize;
           if (p.household?.type)          defaults["household.type"]          = p.household.type;
           if (p.household?.adults)        defaults["household.adults"]        = p.household.adults;
@@ -227,7 +212,7 @@ export default function ApplyPage() {
           if (p.household?.disabledMembers) defaults["household.disabledMembers"] = p.household.disabledMembers;
           if (p.household?.totalIncome)   defaults["household.totalIncome"]   = p.household.totalIncome;
           
-          // Housing history
+          // Housing history (prefilled from profile)
           if (p.housing?.currentHousingSituation) defaults["housing.currentHousingSituation"] = p.housing.currentHousingSituation;
           if (p.housing?.currentAddress)  defaults["housing.currentAddress"]  = p.housing.currentAddress;
           if (p.housing?.city)            defaults["housing.city"]            = p.housing.city;
@@ -238,7 +223,7 @@ export default function ApplyPage() {
           if (p.housing?.monthlyRent)     defaults["housing.monthlyRent"]     = p.housing.monthlyRent;
           if (p.housing?.lengthOfResidence) defaults["housing.lengthOfResidence"] = p.housing.lengthOfResidence;
           
-          // Income & Employment
+          // Income & Employment (prefilled from profile)
           if (p.income?.incomeRange)      defaults["income.incomeRange"]      = p.income.incomeRange;
           if (p.income?.employmentStatus) defaults["employment.status"]       = p.income.employmentStatus;
           if (p.employment?.status)       defaults["employment.status"]       = p.employment.status;
@@ -248,13 +233,13 @@ export default function ApplyPage() {
           if (p.employment?.isHealthcareWorker !== undefined) defaults["employment.isHealthcareWorker"] = String(p.employment.isHealthcareWorker);
           if (p.employment?.isGovernmentEmployee !== undefined) defaults["employment.isGovernmentEmployee"] = String(p.employment.isGovernmentEmployee);
           
-          // Income sources and amounts
+          // Income sources and amounts (prefilled from profile)
           if (Array.isArray(p.income?.sources)) defaults["income.sources"] = p.income.sources;
           if (p.income?.monthlyIncome)    defaults["income.monthlyIncome"]    = p.income.monthlyIncome;
           if (p.income?.annualIncome)     defaults["income.annualIncome"]     = p.income.annualIncome;
           if (p.income?.frequency)        defaults["income.frequency"]        = p.income.frequency;
           
-          // Financial assets
+          // Financial assets (prefilled from profile)
           if (Array.isArray(p.financial?.assets)) defaults["financial.assets"] = p.financial.assets;
           if (p.financial?.checkingBalance)    defaults["financial.checkingBalance"]    = p.financial.checkingBalance;
           if (p.financial?.savingsBalance)     defaults["financial.savingsBalance"]     = p.financial.savingsBalance;
@@ -263,14 +248,10 @@ export default function ApplyPage() {
           if (p.financial?.ownsProperty !== undefined) defaults["financial.ownsProperty"] = String(p.financial.ownsProperty);
           if (p.financial?.ownsVehicle !== undefined)  defaults["financial.ownsVehicle"]  = String(p.financial.ownsVehicle);
           
-          // Banking (encrypted fields should NOT be prefilled for security)
-          if (p.banking?.bankName)        defaults["banking.bankName"]        = p.banking.bankName;
-          if (p.banking?.accountType)     defaults["banking.accountType"]     = p.banking.accountType;
-          
-          // Preferences
+          // Preferences (prefilled from profile)
           if (Array.isArray(p.preferences?.preferredLocations)) defaults["preferences.preferredLocations"] = p.preferences.preferredLocations;
 
-          // Merge with local draft (draft wins)
+          // Merge with local draft (draft wins on conflicts)
           const raw = localStorage.getItem(draftKey(slug));
           const draft = raw ? (JSON.parse(raw) as { data?: WizardData; sectionIndex?: number }) : null;
           setData({ ...defaults, ...(draft?.data ?? {}) });
@@ -302,38 +283,6 @@ export default function ApplyPage() {
   const sectionValid = sectionIsValid(currentSection.id, data);
   const canContinue = !sectionValid ? false : true;
   
-  // Debug logging for household section
-  if (currentSection.id === "household") {
-    console.log('🏠 [Household] Validation:', {
-      sectionId: currentSection.id,
-      type: data["household.type"],
-      size: data["household.householdSize"],
-      adults: data["household.adults"],
-      sectionValid,
-      canContinue,
-      allData: data
-    });
-  }
-
-  /* ── Required docs from program ── */
-  const requiredDocs = useMemo((): string[] => {
-    const rd = program?.requiredDocuments;
-    if (!rd) return [];
-    if (Array.isArray(rd)) return rd.map(String);
-    if (typeof rd === "object" && rd !== null) {
-      const obj = rd as Record<string, unknown>;
-      return [...(Array.isArray(obj.required) ? obj.required.map(String) : [])];
-    }
-    return [];
-  }, [program]);
-
-  const optionalDocs = useMemo((): string[] => {
-    const rd = program?.requiredDocuments;
-    if (!rd || typeof rd !== "object" || Array.isArray(rd)) return [];
-    const obj = rd as Record<string, unknown>;
-    return Array.isArray(obj.optional) ? obj.optional.map(String) : [];
-  }, [program]);
-
   if (!authChecked) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 text-center text-slate-600">
@@ -344,10 +293,8 @@ export default function ApplyPage() {
 
   /* ── Handlers ── */
   function handleChange(key: string, value: unknown) {
-    console.log('📝 [Wizard] handleChange:', { key, value });
     setData((prev) => {
       const updated = { ...prev, [key]: value };
-      console.log('✅ [Wizard] Data updated:', { key, value, isValid: sectionIsValid(currentSection.id, updated) });
       return updated;
     });
     setValidationError(null);
@@ -360,7 +307,15 @@ export default function ApplyPage() {
 
   function handleContinue() {
     if (!sectionIsValid(currentSection.id, data)) {
-      setValidationError("Please fill in the required fields before continuing.");
+      if (currentSection.id === "documents") {
+        const missing = getMissingApplicantDocuments({
+          identityType: typeof data["documents.identityType"] === "string" ? data["documents.identityType"] as "national_id" | "visa" | "drivers_license" : undefined,
+          uploads: Array.isArray(data["_uploadedDocuments"]) ? data["_uploadedDocuments"] as Array<{ type: string }> : [],
+        });
+        setValidationError(missing.join(" "));
+      } else {
+        setValidationError("Please fill in the required fields before continuing.");
+      }
       return;
     }
     setValidationError(null);
@@ -420,7 +375,7 @@ export default function ApplyPage() {
         if (json.errors) {
           const errorMessages = Object.entries(json.errors)
             .map(([field, msg]) => `${field}: ${msg}`)
-            .join(', ');
+            .join("; ");
           throw new Error(`Validation errors: ${errorMessages}`);
         }
         throw new Error(json.error ?? "Submission failed.");
@@ -442,15 +397,15 @@ export default function ApplyPage() {
       case "employment":      return <EmploymentSection data={data} onChange={handleChange} />;
       case "income":          return <IncomeSection data={data} onChange={handleChange} />;
       case "financial":       return <FinancialSection data={data} onChange={handleChange} />;
-      case "banking":         return <BankingSection data={data} onChange={handleChange} />;
       case "housing-history": return <HousingHistorySection data={data} onChange={handleChange} />;
       case "housing-needs":   return <HousingNeedsSection data={data} onChange={handleChange} />;
       case "program-questions": return <ProgramQuestionsSection questions={programQuestions} data={data} onChange={handleChange} />;
       case "documents":
         return (
-          <DocumentsSection
+          <ApplicantDocumentsSection
             data={data}
             applicationId={applicationId}
+            onChange={handleChange}
             onDocumentsChange={(docs) => {
               // Store document IDs in wizard data for tracking
               setData(prev => ({

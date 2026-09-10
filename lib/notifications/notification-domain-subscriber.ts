@@ -55,7 +55,7 @@ export class NotificationDomainSubscriber {
     // PART 2 — Step 2: Domain Subscriber
     console.log("\nStep 2: Domain Subscriber");
     console.log(`  Event Received: ${event.eventName}`);
-    console.log(`  Payload: ${JSON.stringify(event.payload).substring(0, 100)}...`);
+    console.log(`  Payload Keys: ${Object.keys(event.payload || {}).join(", ")}`);
 
     // PHASE B: Query registry to get the communication event
     const communicationEventName = getCommunicationEventForDomainEvent(event.eventName);

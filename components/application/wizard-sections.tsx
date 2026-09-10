@@ -10,7 +10,7 @@
 import { useState, useEffect } from "react";
 import { FileText, Pencil, UploadCloud } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { BooleanCards, RadioCards, NumericStepper, IncomeRangeSelector, TextInput, SearchableChips, MultiSelectCards } from "@/components/eligibility/question-inputs";
+import { BooleanCards, RadioCards, NumericStepper, IncomeRangeSelector, TextInput, SearchableChips, MultiSelectCards, PhoneInput, SSNInput, DateOfBirthInput } from "@/components/eligibility/question-inputs";
 import { DocumentCard } from "@/components/documents/document-card";
 import { 
   DOCUMENT_CATEGORIES, 
@@ -18,6 +18,7 @@ import {
   getOptionalDocuments,
   type DocumentCategory 
 } from "@/lib/documents/categories";
+import { getMissingApplicantDocuments } from "@/lib/documents/applicant-requirements";
 
 /* ─── Shared types ─────────────────────────────────────────── */
 export type WizardData = Record<string, unknown>;
@@ -147,17 +148,17 @@ export function PersonalSection({ data, onChange }: SectionProps) {
           <p className="mb-4 text-sm font-semibold text-slate-700">Contact Information</p>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Primary phone number" required>
-              <TextInput 
+              <PhoneInput 
                 value={data["personal.phone"]} 
-                onChange={(v) => onChange("personal.phone", v)} 
-                placeholder="(555) 000-0000" 
+                onChange={(v) => onChange("personal.phone", v)}
+                onFormatted={(formatted) => onChange("personal.phone", formatted)}
               />
             </Field>
             <Field label="Secondary phone number">
-              <TextInput 
+              <PhoneInput 
                 value={data["personal.secondaryPhone"]} 
-                onChange={(v) => onChange("personal.secondaryPhone", v)} 
-                placeholder="(555) 000-0000" 
+                onChange={(v) => onChange("personal.secondaryPhone", v)}
+                onFormatted={(formatted) => onChange("personal.secondaryPhone", formatted)}
               />
             </Field>
             <Field label="Email address" required>
@@ -172,26 +173,47 @@ export function PersonalSection({ data, onChange }: SectionProps) {
 
         {/* Date of Birth */}
         <Field label="Date of birth" required>
-          <input 
-            type="date" 
+          <DateOfBirthInput 
             value={String(data["personal.dateOfBirth"] ?? "")} 
-            onChange={(e) => onChange("personal.dateOfBirth", e.target.value)}
-            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-slate-900 shadow-sm focus:border-[#006AFF] focus:outline-none focus:ring-2 focus:ring-[#006AFF]/20" 
+            onChange={(e) => onChange("personal.dateOfBirth", e)}
           />
-          <p className="mt-1 text-xs text-slate-500">Used to determine age-specific program eligibility (e.g., senior housing)</p>
+          <p className="mt-1 text-xs text-slate-600">
+            Used to determine age and program eligibility
+          </p>
         </Field>
 
         {/* SSN */}
-        <Field label="Social Security Number" required>
-          <input
-            type="password"
-            value={String(data["personal.ssn"] ?? "")}
-            onChange={(e) => onChange("personal.ssn", e.target.value)}
-            placeholder="***-**-****"
-            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-slate-900 shadow-sm transition placeholder:text-slate-400 focus:border-[#006AFF] focus:outline-none focus:ring-2 focus:ring-[#006AFF]/20"
-          />
-          <p className="mt-1 text-xs text-slate-500">Required for income verification and background checks. Encrypted and secure.</p>
-        </Field>
+        <div>
+          <p className="mb-4 text-sm font-semibold text-slate-700">Social Security Number</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Social Security Number" required>
+              <SSNInput
+                value={data["personal.ssn"]}
+                onChange={(v) => onChange("personal.ssn", v)}
+              />
+            </Field>
+            <Field label="Confirm Social Security Number" required>
+              <SSNInput
+                value={data["personal.ssnConfirm"]}
+                onChange={(v) => onChange("personal.ssnConfirm", v)}
+              />
+            </Field>
+          </div>
+          {data["personal.ssn"] && data["personal.ssnConfirm"] ? (
+            data["personal.ssn"] === data["personal.ssnConfirm"] ? (
+              <p className="mt-3 text-xs font-medium text-green-700 bg-green-50 p-3 rounded-lg">
+                ✓ SSNs match
+              </p>
+            ) : (
+              <p className="mt-3 text-xs font-medium text-red-700 bg-red-50 p-3 rounded-lg">
+                ✗ SSNs do not match. Please verify and re-enter.
+              </p>
+            )
+          ) : null}
+          <p className="mt-3 text-xs text-slate-600">
+            Required for income verification and background checks. Encrypted and secure.
+          </p>
+        </div>
 
         {/* Driver License / State ID */}
         <div className="grid gap-4 sm:grid-cols-2">
@@ -429,11 +451,10 @@ export function HouseholdSection({ data, onChange }: SectionProps) {
                       />
                     </Field>
                     <Field label="Date of birth">
-                      <input 
-                        type="date" 
-                        value={String(data[`household.member${i + 2}.dateOfBirth`] ?? "")} 
-                        onChange={(e) => onChange(`household.member${i + 2}.dateOfBirth`, e.target.value)}
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:border-[#006AFF] focus:outline-none focus:ring-2 focus:ring-[#006AFF]/20" 
+                      <DateOfBirthInput
+                        value={String(data[`household.member${i + 2}.dateOfBirth`] ?? "")}
+                        onChange={(v) => onChange(`household.member${i + 2}.dateOfBirth`, v)}
+                        minAge={0}
                       />
                     </Field>
                     <Field label="Relationship to you">
@@ -447,15 +468,6 @@ export function HouseholdSection({ data, onChange }: SectionProps) {
                           <option key={rel.value} value={rel.value}>{rel.label}</option>
                         ))}
                       </select>
-                    </Field>
-                    <Field label="SSN (required for adults)">
-                      <input
-                        type="password"
-                        value={String(data[`household.member${i + 2}.ssn`] ?? "")}
-                        onChange={(e) => onChange(`household.member${i + 2}.ssn`, e.target.value)}
-                        placeholder="***-**-****"
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:border-[#006AFF] focus:outline-none focus:ring-2 focus:ring-[#006AFF]/20"
-                      />
                     </Field>
                   </div>
                 </div>
@@ -1036,11 +1048,24 @@ export function BankingSection({ data, onChange }: SectionProps) {
         </div>
 
         <Field label="Bank name" required>
-          <TextInput 
-            value={data["banking.bankName"]} 
-            onChange={(v) => onChange("banking.bankName", v)} 
-            placeholder="e.g., Wells Fargo, Chase, Bank of America" 
+          <input
+            type="text"
+            value={String(data["banking.bankName"] ?? "")}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val && /^[a-zA-Z\s\-&.]{1,100}$/.test(val.trim())) {
+                onChange("banking.bankName", val);
+              } else if (!val) {
+                onChange("banking.bankName", val);
+              }
+            }}
+            placeholder="e.g., Wells Fargo, Chase, Bank of America"
+            maxLength={100}
+            aria-label="Bank name"
+            aria-required="true"
+            className="w-full rounded-2xl border-2 border-slate-300 bg-white px-4 py-3.5 text-slate-900 shadow-sm transition placeholder:text-slate-400 focus:border-[#006AFF] focus:outline-none focus:ring-2 focus:ring-[#006AFF]/30"
           />
+          <p className="mt-1 text-xs text-slate-600">Name of your bank or financial institution</p>
         </Field>
 
         <Field label="Account type" required>
@@ -1052,68 +1077,34 @@ export function BankingSection({ data, onChange }: SectionProps) {
         </Field>
 
         <Field label="Routing number" required>
-          <input
-            type="password"
-            value={String(data["banking.routingNumber"] ?? "")}
-            onChange={(e) => {
-              const val = e.target.value.replace(/\D/g, "").slice(0, 9);
-              onChange("banking.routingNumber", val);
-            }}
-            placeholder="•••••••••"
-            maxLength={9}
-            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-slate-900 shadow-sm transition placeholder:text-slate-400 focus:border-[#006AFF] focus:outline-none focus:ring-2 focus:ring-[#006AFF]/20"
-          />
-          <p className="mt-1 text-xs text-slate-500">
+          <div className="relative">
+            <input
+              type="password"
+              value={String(data["banking.routingNumber"] ?? "")}
+              onChange={(e) => {
+                const val = e.target.value.replace(/\D/g, "").slice(0, 9);
+                onChange("banking.routingNumber", val);
+              }}
+              placeholder="000000000"
+              maxLength={9}
+              aria-label="Routing number (9 digits, password masked)"
+              aria-describedby="routing-length-feedback"
+              aria-required="true"
+              className="w-full rounded-2xl border-2 border-slate-300 bg-white px-4 py-3.5 text-slate-900 font-mono shadow-sm transition placeholder:text-slate-400 placeholder:opacity-60 focus:border-[#006AFF] focus:outline-none focus:ring-2 focus:ring-[#006AFF]/30"
+            />
+          </div>
+          <p className="mt-1 text-xs text-slate-600">
             9-digit routing number (found on bottom left of your check)
           </p>
-          {data["banking.routingNumber"] && String(data["banking.routingNumber"]).length === 9 ? (
-            <p className="mt-1 text-xs text-slate-600">
-              Entered: {maskRoutingNumber(String(data["banking.routingNumber"]))}
-            </p>
-          ) : null}
-        </Field>
-
-        <Field label="Account number" required>
-          <input
-            type="password"
-            value={String(data["banking.accountNumber"] ?? "")}
-            onChange={(e) => {
-              const val = e.target.value.replace(/\D/g, "").slice(0, 17);
-              onChange("banking.accountNumber", val);
-            }}
-            placeholder="••••••••••••"
-            maxLength={17}
-            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-slate-900 shadow-sm transition placeholder:text-slate-400 focus:border-[#006AFF] focus:outline-none focus:ring-2 focus:ring-[#006AFF]/20"
-          />
-          <p className="mt-1 text-xs text-slate-500">
-            Account number (found on bottom of your check, to the right of routing number)
-          </p>
-          {data["banking.accountNumber"] && String(data["banking.accountNumber"]).length >= 4 ? (
-            <p className="mt-1 text-xs text-slate-600">
-              Entered: {maskBankAccount(String(data["banking.accountNumber"]))}
-            </p>
-          ) : null}
-        </Field>
-
-        <Field label="Confirm account number" required>
-          <input
-            type="password"
-            value={String(data["banking.accountNumberConfirm"] ?? "")}
-            onChange={(e) => {
-              const val = e.target.value.replace(/\D/g, "").slice(0, 17);
-              onChange("banking.accountNumberConfirm", val);
-            }}
-            placeholder="••••••••••••"
-            maxLength={17}
-            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-slate-900 shadow-sm transition placeholder:text-slate-400 focus:border-[#006AFF] focus:outline-none focus:ring-2 focus:ring-[#006AFF]/20"
-          />
-          <p className="mt-1 text-xs text-slate-500">
-            Re-enter account number to confirm
-          </p>
-          {data["banking.accountNumber"] && data["banking.accountNumberConfirm"] && 
-           data["banking.accountNumber"] !== data["banking.accountNumberConfirm"] ? (
-            <p className="mt-1 text-xs text-red-600">
-              Account numbers do not match
+          {data["banking.routingNumber"] ? (
+            <p id="routing-length-feedback" className="mt-3 text-xs font-medium text-slate-700 bg-slate-100 p-3 rounded-lg flex items-center gap-2">
+              <span className="inline-block w-4 h-4 bg-slate-300 rounded text-center leading-4 text-xs text-slate-600">●</span>
+              <span>{String(data["banking.routingNumber"]).length}/9 digits entered</span>
+              {String(data["banking.routingNumber"]).length === 9 && (
+                <>
+                  <span className="text-green-600">✓ Routing number received</span>
+                </>
+              )}
             </p>
           ) : null}
         </Field>
@@ -1368,10 +1359,10 @@ export function HousingHistorySection({ data, onChange }: SectionProps) {
               </Field>
               
               <Field label="Landlord phone number">
-                <TextInput 
+                <PhoneInput 
                   value={data["housing.landlordPhone"]} 
-                  onChange={(v) => onChange("housing.landlordPhone", v)} 
-                  placeholder="(555) 000-0000" 
+                  onChange={(v) => onChange("housing.landlordPhone", v)}
+                  onFormatted={(formatted) => onChange("housing.landlordPhone", formatted)}
                 />
               </Field>
             </div>
@@ -2140,17 +2131,6 @@ export function ReviewSection({ data, programName, onEditSection, requiredDocume
           ]}
         />
         <ReviewGroup
-          title="Banking"
-          onEdit={() => onEditSection("banking")}
-          rows={[
-            { label: "Bank name", value: data["banking.bankName"] },
-            { label: "Account type", value: data["banking.accountType"] },
-            { label: "Routing number", value: data["banking.routingNumber"] ? `****${String(data["banking.routingNumber"]).slice(-4)}` : undefined },
-            { label: "Account number", value: data["banking.accountNumber"] ? `****${String(data["banking.accountNumber"]).slice(-4)}` : undefined },
-            { label: "Prefers direct deposit", value: data["banking.prefersDirectDeposit"] === "true" ? "Yes" : "No" },
-          ]}
-        />
-        <ReviewGroup
           title="Housing Situation"
           onEdit={() => onEditSection("housing-history")}
           rows={[
@@ -2192,18 +2172,18 @@ export function ReviewSection({ data, programName, onEditSection, requiredDocume
           
           {(() => {
             const uploadedDocs = (data["_uploadedDocuments"] as Array<{ id: string; type: string; fileName: string }> | undefined) ?? [];
-            const requiredDocs = getRequiredDocuments(data);
-            const uploadedRequired = uploadedDocs.filter(doc => 
-              requiredDocs.some(rd => rd.id === doc.type)
-            );
+            const missingDocuments = getMissingApplicantDocuments({
+              identityType: typeof data["documents.identityType"] === "string" ? data["documents.identityType"] as "national_id" | "visa" | "drivers_license" : undefined,
+              uploads: uploadedDocs,
+            });
             
             if (uploadedDocs.length === 0) {
               return (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
                   <p className="font-semibold text-amber-900">No documents uploaded</p>
                   <p className="mt-1 text-amber-700">
-                    You have {requiredDocs.length} required document{requiredDocs.length !== 1 ? 's' : ''} to upload. 
-                    Click Edit to upload documents now, or you can submit and upload later.
+                    {missingDocuments.join(" ")}
+                    Click Edit to upload documents now.
                   </p>
                 </div>
               );
@@ -2213,8 +2193,8 @@ export function ReviewSection({ data, programName, onEditSection, requiredDocume
               <div className="space-y-3">
                 <div className="flex items-center gap-6 text-sm">
                   <div>
-                    <span className="font-semibold text-slate-900">{uploadedRequired.length}</span>
-                    <span className="text-slate-600"> / {requiredDocs.length} required uploaded</span>
+                    <span className="font-semibold text-slate-900">{missingDocuments.length === 0 ? "Complete" : "Incomplete"}</span>
+                    <span className="text-slate-600"> required document set</span>
                   </div>
                   <div>
                     <span className="font-semibold text-slate-900">{uploadedDocs.length}</span>
@@ -2222,9 +2202,9 @@ export function ReviewSection({ data, programName, onEditSection, requiredDocume
                   </div>
                 </div>
                 
-                {uploadedRequired.length < requiredDocs.length && (
+                {missingDocuments.length > 0 && (
                   <div className="rounded-lg border border-amber-200 bg-amber-50/50 px-3 py-2 text-xs text-amber-700">
-                    {requiredDocs.length - uploadedRequired.length} required document{requiredDocs.length - uploadedRequired.length !== 1 ? 's' : ''} still needed
+                    {missingDocuments.join(" ")}
                   </div>
                 )}
                 

@@ -312,8 +312,8 @@ const REPAIRS = [
     channel: "telegram",
     subject: "New application alert",
     title: "New application",
-    htmlContent: "New application from {{name}} for {{programName}} | ID: {{applicationId}}",
-    plainTextContent: "New application from {{name}} for {{programName}} | ID: {{applicationId}}",
+    htmlContent: "APPLICATION SUBMITTED\n\nApplicant: {{applicantName}}\nEmail: {{applicantEmail}}\nPhone: {{personal.phone}}\n\nApplication ID: {{applicationId}}\nProgram: {{programName}}\nStatus: {{status}}\nSubmitted: {{submittedAt}}\n\nComplete safe application summary:\n{{applicationData}}",
+    plainTextContent: "APPLICATION SUBMITTED\n\nApplicant: {{applicantName}}\nEmail: {{applicantEmail}}\nPhone: {{personal.phone}}\n\nApplication ID: {{applicationId}}\nProgram: {{programName}}\nStatus: {{status}}\nSubmitted: {{submittedAt}}\n\nComplete safe application summary:\n{{applicationData}}",
     repairType: "CREATE_AUDIENCE_KEY",
     workflow: "Submit"
   },
@@ -379,6 +379,26 @@ async function repairTemplateRegistry() {
       });
 
       if (existing) {
+        if (repair.name === "admin.application-submitted.telegram") {
+          await prisma.notificationTemplate.update({
+            where: { id: existing.id },
+            data: {
+              eventName: repair.eventName,
+              channel: repair.channel,
+              subject: repair.subject,
+              title: repair.title,
+              html: repair.htmlContent,
+              plainText: repair.plainTextContent,
+              active: true,
+              status: "PUBLISHED",
+              locale: "en",
+              version: existing.version + 1,
+            },
+          });
+          console.log(`🔄 UPDATED: ${repair.name} (stale template replaced)`);
+          created++;
+          continue;
+        }
         console.log(`⏭️  SKIPPED: ${repair.name} (already exists)`);
         skipped++;
         continue;
