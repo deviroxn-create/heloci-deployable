@@ -80,7 +80,7 @@ export function DecisionTab({
           </div>
         </div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[350px_1fr]">
+        <div className="grid gap-6 grid-cols-1 lg:grid-cols-[350px_1fr] w-full">
           {/* Left Column: Decision Summary */}
           <div className="order-2 lg:order-1">
             <DecisionSummary

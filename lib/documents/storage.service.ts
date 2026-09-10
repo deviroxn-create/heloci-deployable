@@ -9,6 +9,7 @@
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { createClient } from '@supabase/supabase-js';
+import type { UploadApiResponse } from 'cloudinary';
 
 const BUCKET_NAME = 'heloci-documents';
 const STORAGE_PREFIX = `supabase://${BUCKET_NAME}/`;
@@ -35,7 +36,60 @@ export interface UploadOptions {
   documentType: string;
 }
 
+export interface PropertyImageUploadOptions {
+  propertyId?: string;
+  folder?: string;
+}
+
 class DocumentStorageService {
+  async uploadPropertyImage(
+    file: Buffer,
+    originalName: string,
+    options: PropertyImageUploadOptions = {}
+  ): Promise<{ publicId: string; secureUrl: string; width: number; height: number; format: string }> {
+    if (!process.env.CLOUDINARY_URL?.startsWith('cloudinary://')) {
+      throw new Error('Cloudinary is not configured');
+    }
+
+    const { v2: cloudinary } = await import('cloudinary');
+    cloudinary.config({
+      cloudinary_url: process.env.CLOUDINARY_URL,
+      secure: true,
+    });
+
+    const result = await new Promise<UploadApiResponse>((resolve, reject) => {
+      const upload = cloudinary.uploader.upload_stream(
+        {
+          folder: options.folder || 'heloci/properties',
+          public_id: options.propertyId ? `${options.propertyId}-${uuidv4()}` : undefined,
+          resource_type: 'image',
+          transformation: [
+            { width: 1600, height: 1200, crop: 'limit' },
+            { quality: 'auto', fetch_format: 'auto' },
+          ],
+        },
+        (error, uploaded) => {
+          if (error || !uploaded) {
+            reject(error || new Error('Property image upload failed'));
+            return;
+          }
+
+          resolve(uploaded);
+        }
+      );
+
+      upload.end(file);
+    });
+
+    return {
+      publicId: result.public_id,
+      secureUrl: result.secure_url,
+      width: result.width,
+      height: result.height,
+      format: result.format,
+    };
+  }
+
   /**
    * Upload a document
    */

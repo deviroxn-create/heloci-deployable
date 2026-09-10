@@ -9,6 +9,7 @@ import { AuthInput } from "@/components/auth/auth-input";
 import { Button } from "@/components/ui/button";
 import { passwordResetSchema } from "@/lib/validations/schemas";
 import { supabase } from "@/lib/supabase/client";
+import { getAuthRedirectOrigin } from "@/lib/constants/site";
 import type { z } from "zod";
 
 type ResetPasswordValues = z.infer<typeof passwordResetSchema>;
@@ -30,7 +31,7 @@ export function ForgotPasswordForm() {
     setSuccess(null);
     setBusy(true);
 
-    const redirectTo = typeof window !== "undefined" ? `${window.location.origin}/login` : "/login";
+    const redirectTo = `${getAuthRedirectOrigin()}/login`;
     const { error } = await supabase.auth.resetPasswordForEmail(values.email, { redirectTo });
 
     setBusy(false);

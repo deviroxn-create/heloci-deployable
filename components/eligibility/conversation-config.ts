@@ -147,7 +147,6 @@ export const EMPLOYMENT_STATUS_OPTIONS: ConversationOption[] = [
   { value: "retired",              label: "Retired",               icon: "🏖️" },
   { value: "student",              label: "Student",               icon: "📚" },
   { value: "disability_benefits",  label: "On disability benefits", icon: "♿" },
-  { value: "not_sure",             label: "Prefer not to say",     icon: "🤐" },
 ];
 
 export const CURRENT_HOUSING_OPTIONS: ConversationOption[] = [

@@ -7,11 +7,6 @@ const PROTECTED_PATHS = ["/applicant", "/staff", "/admin"];
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
-  // Only run auth check on protected routes
-  if (!PROTECTED_PATHS.some((path) => pathname.startsWith(path))) {
-    return NextResponse.next();
-  }
-
   // Build a response we can mutate (to refresh session cookies)
   let response = NextResponse.next({
     request: { headers: request.headers }
@@ -44,7 +39,7 @@ export async function proxy(request: NextRequest) {
   // getUser() refreshes the session if needed
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) {
+  if (!user && PROTECTED_PATHS.some((path) => pathname.startsWith(path))) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirectTo", pathname);
     return NextResponse.redirect(loginUrl);
@@ -54,5 +49,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/applicant/:path*", "/staff/:path*", "/admin/:path*"]
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|images|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"
+  ]
 };

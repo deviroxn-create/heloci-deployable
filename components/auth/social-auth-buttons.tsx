@@ -11,29 +11,36 @@ type SocialAuthButtonsProps = {
 
 export function SocialAuthButtons({ onError }: SocialAuthButtonsProps) {
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleProvider = async (provider: "google" | "apple") => {
     if (typeof window === "undefined") {
       return;
     }
 
+    setError(null);
     setBusy(true);
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        // Redirect to auth callback that will determine correct dashboard
         redirectTo: `${window.location.origin}/auth/callback`
       }
     });
     setBusy(false);
 
     if (error) {
+      setError(error.message);
       onError?.(error.message);
     }
   };
 
   return (
     <div className="space-y-3">
+      {error ? (
+        <p role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </p>
+      ) : null}
       <Button
         type="button"
         variant="outline"

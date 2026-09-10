@@ -1,11 +1,11 @@
-import { ArrowRight, FileText, Home, MessageSquare, ShieldCheck, Users } from "lucide-react";
+import { ArrowRight, FileText, Home, MessageSquare, Quote, ShieldCheck, Star, Users } from "lucide-react";
 import Link from "next/link";
-import { prisma } from "@/lib/prisma/client";
+import { listPublicProperties } from "@/lib/properties/public-property.service";
 import { HERO_IMAGES, MISSION_IMAGE } from "@/lib/landing-images";
 import { PageShell } from "@/components/shared/page-shell";
-import { PropertyCard } from "@/components/property/property-card";
 import { HeroCrossfade } from "@/components/marketing/hero-crossfade";
 import { ResilientImage } from "@/components/marketing/resilient-image";
+import { PropertiesCarousel } from "@/components/marketing/properties-carousel";
 import { Button } from "@/components/ui/button";
 
 const steps = [
@@ -42,17 +42,13 @@ const faqs = [
 ];
 
 export default async function HomePage() {
-  const properties = await prisma.property.findMany({
-    where: { status: "AVAILABLE" },
-    include: { images: true },
-    take: 4
-  });
+  const properties = await listPublicProperties({ limit: 8 });
 
   return (
     <PageShell>
-      <section className="relative isolate min-h-[560px] overflow-hidden rounded-[32px] shadow-soft md:min-h-[620px]">
+      <section className="relative min-h-[560px] overflow-hidden rounded-[32px] shadow-soft md:min-h-[620px]">
         <HeroCrossfade images={HERO_IMAGES} />
-        <div className="relative z-10 flex min-h-[560px] items-end px-6 py-10 md:min-h-[620px] md:px-12 md:py-14">
+        <div className="absolute inset-0 flex min-h-[560px] items-end px-6 py-10 md:min-h-[620px] md:px-12 md:py-14">
           <div className="max-w-2xl text-white">
             <p className="inline-flex rounded-full border border-white/30 bg-white/10 px-4 py-2 text-sm font-semibold uppercase tracking-[0.2em] text-white backdrop-blur-sm">
               Housing support with dignity
@@ -75,6 +71,45 @@ export default async function HomePage() {
         </div>
       </section>
 
+      <section className="grid gap-8 overflow-hidden rounded-[32px] bg-white shadow-soft lg:grid-cols-[0.9fr_1.1fr]" aria-labelledby="about-heading">
+        <div className="relative min-h-[320px] bg-gradient-to-br from-[#EFF6FF] to-[#DBEAFE]">
+          <ResilientImage src={MISSION_IMAGE.src} alt={MISSION_IMAGE.alt} fill sizes="(max-width: 1024px) 100vw, 45vw" className="object-cover" priority={false} />
+        </div>
+        <div className="flex flex-col justify-center p-8 md:p-12">
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand">About Heloci</p>
+          <h2 id="about-heading" className="mt-4 text-3xl font-semibold text-slate-950">A clearer way to find housing support.</h2>
+          <p className="mt-5 max-w-xl text-base leading-8 text-slate-600">
+            Heloci brings verified housing opportunities, eligibility guidance, applications, and trusted people together in one calm, connected experience.
+          </p>
+          <div className="mt-7 grid gap-4 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+            <div className="flex gap-3">
+              <Home className="mt-1 h-5 w-5 shrink-0 text-brand" />
+              <div>
+                <p className="text-sm font-semibold text-slate-950">Find options</p>
+                <p className="mt-1 text-sm leading-6 text-slate-600">Explore homes and programs in one place.</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <FileText className="mt-1 h-5 w-5 shrink-0 text-brand" />
+              <div>
+                <p className="text-sm font-semibold text-slate-950">Know your next step</p>
+                <p className="mt-1 text-sm leading-6 text-slate-600">Get guidance before you apply.</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <Users className="mt-1 h-5 w-5 shrink-0 text-brand" />
+              <div>
+                <p className="text-sm font-semibold text-slate-950">Stay supported</p>
+                <p className="mt-1 text-sm leading-6 text-slate-600">Stay connected throughout your journey.</p>
+              </div>
+            </div>
+          </div>
+          <Link href="/about" className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-brand hover:text-brandHover">
+            Learn more about Heloci <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+      </section>
+
       <section className="space-y-6" aria-labelledby="housing-opportunities-heading">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
@@ -87,14 +122,57 @@ export default async function HomePage() {
           </Button>
         </div>
         {properties.length > 0 ? (
-          <div className="grid gap-6 lg:grid-cols-4">
-            {properties.map((property) => <PropertyCard key={property.id} property={property} />)}
-          </div>
+          <PropertiesCarousel properties={properties} autoplayInterval={5000} />
         ) : (
           <div className="rounded-[28px] border border-border bg-white px-6 py-12 text-center shadow-soft">
             <p className="text-base text-slate-600">Housing opportunities will appear here once properties are published.</p>
           </div>
         )}
+      </section>
+
+      <section className="overflow-hidden rounded-[32px] bg-[#EAF2FF] shadow-soft" aria-labelledby="testimonial-heading">
+        <div className="grid lg:grid-cols-[0.8fr_1.2fr]">
+          <div className="relative min-h-[320px] bg-brand">
+            <ResilientImage
+              src={MISSION_IMAGE.src}
+              alt="Marisol and her family in their community"
+              fill
+              sizes="(max-width: 1024px) 100vw, 35vw"
+              className="object-cover"
+            />
+            <div className="absolute inset-x-6 bottom-6 rounded-2xl bg-slate-950/75 px-5 py-4 text-white backdrop-blur-sm">
+              <p className="text-sm font-semibold">Marisol R.</p>
+              <p className="mt-1 text-xs text-white/70">Heloci applicant, Houston</p>
+            </div>
+          </div>
+          <div className="flex flex-col justify-center p-8 md:p-12">
+            <div className="flex items-center gap-1 text-amber-500" aria-label="5 out of 5 stars">
+              {Array.from({ length: 5 }, (_, index) => (
+                <Star key={index} className="h-4 w-4 fill-current" aria-hidden="true" />
+              ))}
+            </div>
+            <h2 id="testimonial-heading" className="mt-5 text-sm font-semibold uppercase tracking-[0.24em] text-brand">A clearer path home</h2>
+            <Quote className="mt-7 h-10 w-10 text-brand/30" aria-hidden="true" />
+            <blockquote className="mt-4 max-w-2xl text-2xl font-semibold leading-tight text-slate-950 md:text-3xl">
+              “Heloci made the process feel possible. I always knew what to do next, and I never felt like I was figuring it out alone.”
+            </blockquote>
+            <div className="mt-8 flex items-center gap-3">
+              <div className="relative h-12 w-12 overflow-hidden rounded-full ring-2 ring-white">
+                <ResilientImage
+                  src={MISSION_IMAGE.src}
+                  alt="Portrait of Marisol R."
+                  fill
+                  sizes="48px"
+                  className="object-cover"
+                />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-950">Marisol R.</p>
+                <p className="mt-1 text-sm text-slate-600">Found a clearer path home</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section className="rounded-[32px] bg-white p-8 shadow-soft md:p-10" aria-labelledby="how-it-works-heading">
@@ -118,22 +196,6 @@ export default async function HomePage() {
               <p className="mt-3 text-sm leading-7 text-slate-600">{step.description}</p>
             </div>
           ))}
-        </div>
-      </section>
-
-      <section className="grid gap-8 overflow-hidden rounded-[32px] bg-white shadow-soft lg:grid-cols-[0.9fr_1.1fr]" aria-labelledby="mission-heading">
-        <div className="relative min-h-[320px] bg-gradient-to-br from-[#EFF6FF] to-[#DBEAFE]">
-          <ResilientImage src={MISSION_IMAGE.src} alt={MISSION_IMAGE.alt} fill sizes="(max-width: 1024px) 100vw, 45vw" className="object-cover" priority={false} />
-        </div>
-        <div className="flex flex-col justify-center p-8 md:p-12">
-          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand">Our mission</p>
-          <h2 id="mission-heading" className="mt-4 text-3xl font-semibold text-slate-950">Housing support should feel human.</h2>
-          <p className="mt-5 max-w-xl text-base leading-8 text-slate-600">
-            Heloci brings housing opportunities, eligibility guidance, applications, and people together in one clear place so you can take the next step with confidence.
-          </p>
-          <Link href="/about" className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-brand hover:text-brandHover">
-            Learn about Heloci <ArrowRight className="h-4 w-4" />
-          </Link>
         </div>
       </section>
 

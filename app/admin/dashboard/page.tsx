@@ -164,7 +164,7 @@ export default async function AdminDashboardPage() {
       }
     >
       {/* KPI Cards - Row 1 */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
         {kpiCards.map((card) => {
           const Icon = card.icon;
           return (
@@ -181,7 +181,7 @@ export default async function AdminDashboardPage() {
       </div>
 
       {/* Row 2: Application Queue + Program Activity */}
-      <div className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
+      <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr] 2xl:grid-cols-[1.6fr_1fr]">
         {/* Application Queue */}
         <div className="rounded-[28px] border border-border bg-white p-6 shadow-soft">
           <div className="flex items-center justify-between gap-4 mb-6">
@@ -281,10 +281,10 @@ export default async function AdminDashboardPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm whitespace-nowrap">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="text-left py-3 px-4 font-semibold text-slate-500 text-xs uppercase tracking-wider">Name</th>
+                  <th className="text-left py-3 px-4 font-semibold text-slate-500 text-xs uppercase tracking-wider sticky left-0 z-10 bg-white">Name</th>
                   <th className="text-left py-3 px-4 font-semibold text-slate-500 text-xs uppercase tracking-wider">Role</th>
                   <th className="text-center py-3 px-4 font-semibold text-slate-500 text-xs uppercase tracking-wider">Assigned</th>
                   <th className="text-center py-3 px-4 font-semibold text-slate-500 text-xs uppercase tracking-wider">Open</th>
@@ -295,7 +295,7 @@ export default async function AdminDashboardPage() {
               <tbody>
                 {data.staffWorkload.map((staff) => (
                   <tr key={staff.id} className="border-b border-border hover:bg-slate-50">
-                    <td className="py-3 px-4">
+                    <td className="py-3 px-4 sticky left-0 z-10 bg-white hover:bg-slate-50">
                       <p className="font-semibold text-slate-950">{staff.name || staff.email}</p>
                     </td>
                     <td className="py-3 px-4">
@@ -365,7 +365,7 @@ export default async function AdminDashboardPage() {
       </div>
 
       {/* Sidebar - Quick Actions */}
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-3 2xl:grid-cols-[2fr_1fr]">
         <div className="rounded-[28px] border border-border bg-white p-6 shadow-soft xl:col-span-2">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-4">Quick actions</p>
           <div className="grid grid-cols-2 gap-3">

@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { resolveActiveTab, type CaseTabId } from "@/lib/admin/case-tabs";
 import type { CaseDetail } from "@/lib/cases/case-service";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/components/ui/toast";
 import { DocumentReviewWorkspace } from "@/components/reviews/document-review-workspace";
 import { DecisionTab } from "@/components/reviews/decision-tab";
 
@@ -61,7 +62,8 @@ export default function CaseDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<CaseTabId>("profile");
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+  const { addToast } = useToast();
 
   useEffect(() => {
     setActiveTab(resolveActiveTab(searchParams.get("tab")));
@@ -78,6 +80,47 @@ export default function CaseDetailPage() {
     } catch (err: any) {
       setError(err.message);
       console.error("Error refreshing case:", err);
+    }
+  };
+
+  const updateApplicationStatus = async (status: "approved" | "rejected") => {
+    setUpdatingStatus(status);
+
+    try {
+      const response = await fetch(`/api/cases/${caseId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "updateStatus", status })
+      });
+
+      if (!response.ok) {
+        let message = "The application status could not be updated.";
+        try {
+          const result = await response.json();
+          if (typeof result?.error === "string") message = result.error;
+        } catch {
+          // Keep the fallback message when the API does not return JSON.
+        }
+        throw new Error(message);
+      }
+
+      addToast({
+        type: "success",
+        title: `Application ${status}`,
+        message: `${caseData?.applicant.name || "The applicant"}'s application is now ${status}.`
+      });
+      setCaseData((currentCase) =>
+        currentCase ? { ...currentCase, status } : currentCase
+      );
+      void refreshCase();
+    } catch (err) {
+      addToast({
+        type: "error",
+        title: "Status update failed",
+        message: err instanceof Error ? err.message : "Please try again."
+      });
+    } finally {
+      setUpdatingStatus(null);
     }
   };
 
@@ -103,7 +146,7 @@ export default function CaseDetailPage() {
     if (caseId) {
       fetchCase();
     }
-  }, [caseId, refreshKey]);
+  }, [caseId]);
 
   if (loading) {
     return (
@@ -140,7 +183,7 @@ export default function CaseDetailPage() {
     <div className="min-h-screen bg-surface">
       {/* Header */}
       <div className="border-b border-border bg-white sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-6 py-4">
+        <div className="px-6 py-4 max-w-[1800px] mx-auto">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Link href="/admin/applications">
@@ -166,7 +209,7 @@ export default function CaseDetailPage() {
       </div>
 
       {/* Three-Column Layout */}
-      <div className="max-w-7xl mx-auto px-6 py-6 grid gap-6 lg:grid-cols-[300px_1fr_320px]">
+      <div className="px-6 py-6 grid gap-6 w-full grid-cols-1 xl:grid-cols-[300px_1fr_320px] max-w-full mx-auto">
         {/* Left Sidebar: Applicant Summary */}
         <div className="rounded-[28px] border border-border bg-white p-6 shadow-soft h-fit sticky top-20">
           <div className="text-center mb-6">
@@ -235,38 +278,40 @@ export default function CaseDetailPage() {
         {/* Center: Case Details */}
         <div className="rounded-[28px] border border-border bg-white p-6 shadow-soft">
           {/* Tabs */}
-          <div className="flex gap-2 mb-6 border-b border-border pb-4 overflow-x-auto">
-            {[
-              { id: "communication", label: "Communication", icon: MessageSquare },
-              { id: "profile", label: "Profile" },
-              { id: "application", label: "Application" },
-              { id: "eligibility", label: "Eligibility" },
-              { id: "checklist", label: "Checklist" },
-              { id: "documents", label: "Documents" },
-              { id: "decision", label: "Decision" },
-              { id: "timeline", label: "Timeline" },
-              { id: "audit", label: "Audit" },
-              { id: "notes", label: "Notes" }
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  const nextTab = tab.id as CaseTabId;
-                  setActiveTab(nextTab);
-                  const params = new URLSearchParams(searchParams.toString());
-                  params.set("tab", nextTab);
-                  router.replace(`/admin/cases/${caseId}?${params.toString()}`, { scroll: false });
-                }}
-                className={`shrink-0 px-4 py-2 text-sm font-medium transition flex items-center gap-2 ${
-                  activeTab === tab.id
-                    ? "text-brand border-b-2 border-brand"
-                    : "text-slate-600 hover:text-slate-950"
-                }`}
-              >
-                {tab.icon && <tab.icon className="h-4 w-4" />}
-                {tab.label}
-              </button>
-            ))}
+          <div className="mb-6 border-b border-border pb-4">
+            <div className="flex gap-2 overflow-x-auto scrollbar-thin">
+              {[
+                { id: "communication", label: "Communication", icon: MessageSquare },
+                { id: "profile", label: "Profile" },
+                { id: "application", label: "Application" },
+                { id: "eligibility", label: "Eligibility" },
+                { id: "checklist", label: "Checklist" },
+                { id: "documents", label: "Documents" },
+                { id: "decision", label: "Decision" },
+                { id: "timeline", label: "Timeline" },
+                { id: "audit", label: "Audit" },
+                { id: "notes", label: "Notes" }
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    const nextTab = tab.id as CaseTabId;
+                    setActiveTab(nextTab);
+                    const params = new URLSearchParams(searchParams.toString());
+                    params.set("tab", nextTab);
+                    router.replace(`/admin/cases/${caseId}?${params.toString()}`, { scroll: false });
+                  }}
+                  className={`shrink-0 px-4 py-2 text-sm font-medium transition flex items-center gap-2 whitespace-nowrap ${
+                    activeTab === tab.id
+                      ? "text-brand border-b-2 border-brand"
+                      : "text-slate-600 hover:text-slate-950"
+                  }`}
+                >
+                  {tab.icon && <tab.icon className="h-4 w-4" />}
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Tab Content */}
@@ -305,17 +350,19 @@ export default function CaseDetailPage() {
               <button className="w-full rounded-xl bg-slate-100 text-slate-700 px-4 py-2.5 text-sm font-medium hover:bg-slate-200 transition" onClick={() => setActiveTab("communication")}>
                 Open Communication
               </button>
-              <button className="w-full rounded-xl bg-success/10 text-success px-4 py-2.5 text-sm font-medium hover:bg-success/20 transition" onClick={async () => {
-                await fetch(`/api/cases/${caseId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "updateStatus", status: "approved" }) });
-                setRefreshKey((k) => k + 1);
-              }}>
-                Approve
+              <button
+                className="w-full rounded-xl bg-success/10 text-success px-4 py-2.5 text-sm font-medium hover:bg-success/20 transition disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => void updateApplicationStatus("approved")}
+                disabled={updatingStatus !== null}
+              >
+                {updatingStatus === "approved" ? "Approving..." : "Approve"}
               </button>
-              <button className="w-full rounded-xl bg-error/10 text-error px-4 py-2.5 text-sm font-medium hover:bg-error/20 transition" onClick={async () => {
-                await fetch(`/api/cases/${caseId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "updateStatus", status: "rejected" }) });
-                setRefreshKey((k) => k + 1);
-              }}>
-                Reject
+              <button
+                className="w-full rounded-xl bg-error/10 text-error px-4 py-2.5 text-sm font-medium hover:bg-error/20 transition disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => void updateApplicationStatus("rejected")}
+                disabled={updatingStatus !== null}
+              >
+                {updatingStatus === "rejected" ? "Rejecting..." : "Reject"}
               </button>
               <button className="w-full rounded-xl bg-slate-100 text-slate-700 px-4 py-2.5 text-sm font-medium hover:bg-slate-200 transition" onClick={() => setActiveTab("documents")}>
                 Review Documents
@@ -827,7 +874,7 @@ function DocumentsTab({ caseData, caseId }: { caseData: CaseDetail; caseId: stri
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-6 w-full">
       {/* Left Panel: Document List */}
       <div className="space-y-4">
         {/* Search and Filter */}

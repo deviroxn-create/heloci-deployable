@@ -174,10 +174,10 @@ export function SenderIdentitiesClient({ organizationId, initialSenders }: Sende
             <p className="text-gray-500 text-center py-8">No sender identities found. Create one to get started.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm whitespace-nowrap">
                 <thead className="border-b">
                   <tr>
-                    <th className="text-left py-3 px-4">Display Name</th>
+                    <th className="text-left py-3 px-4 sticky left-0 z-10 bg-white">Display Name</th>
                     <th className="text-left py-3 px-4">Email Address</th>
                     <th className="text-left py-3 px-4">Department</th>
                     <th className="text-left py-3 px-4">Status</th>
@@ -190,7 +190,7 @@ export function SenderIdentitiesClient({ organizationId, initialSenders }: Sende
                 <tbody>
                   {filteredSenders.map((sender) => (
                     <tr key={sender.id} className="border-b hover:bg-gray-50">
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-4 sticky left-0 z-10 bg-white hover:bg-gray-50">
                         <div className="font-medium">
                           {sender.displayName}
                           {sender.isDefault && <Badge className="ml-2 bg-blue-100 text-blue-800">Default</Badge>}
@@ -209,7 +209,7 @@ export function SenderIdentitiesClient({ organizationId, initialSenders }: Sende
                       <td className="py-3 px-4">{getVerificationBadge(sender.verificationStatus)}</td>
                       <td className="py-3 px-4 text-xs">{new Date(sender.createdAt).toLocaleDateString()}</td>
                       <td className="py-3 px-4 text-right">
-                        <div className="flex gap-2 justify-end">
+                        <div className="flex gap-2 justify-end flex-shrink-0">
                           {!sender.isDefault && (
                             <Button
                               size="sm"

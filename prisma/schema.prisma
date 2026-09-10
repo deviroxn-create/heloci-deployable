@@ -67,8 +67,8 @@ model User {
 }
 
 model Property {
-  id                String          @id @default(cuid())
-  externalId        String?         @unique
+  id                String            @id @default(cuid())
+  externalId        String?           @unique
   title             String
   description       String
   address           String
@@ -85,13 +85,19 @@ model Property {
   amenities         String[]
   specialOffers     String[]
   contactPhone      String?
-  availabilityCount Int             @default(0)
-  status            String          @default("AVAILABLE")
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
+  availabilityCount Int               @default(0)
+  status            String            @default("AVAILABLE")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  organizationId    String?
   applications      Application[]
+  programProperties ProgramProperty[]
+  organization      Organization?     @relation(fields: [organizationId], references: [id])
   images            PropertyImage[]
   units             PropertyUnit[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId])
 }
 
 model PropertyUnit {
@@ -156,10 +162,13 @@ model Program {
   organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   programApplications    ProgramApplication[]
   programEvents          ProgramEvent[]          @relation("ProgramEventProgram")
+  programProperties      ProgramProperty[]
   programRecommendations ProgramRecommendation[]
   questionSets           QuestionSet[]
   waitlist               WaitlistEntry[]
   workflowTriggers       WorkflowTrigger[]
+
+  @@unique([organizationId, id])
 }
 
 model ProgramEvent {
@@ -210,10 +219,33 @@ model Organization {
   organizationCommunications OrganizationCommunication[]
   members                    OrganizationMember[]
   programs                   Program[]
+  programProperties          ProgramProperty[]
+  properties                 Property[]
   senderIdentities           SenderIdentity[]
   users                      User[]
 
   @@index([createdAt])
+}
+
+model ProgramProperty {
+  id                         String                      @id @default(cuid())
+  organizationId             String
+  programId                  String
+  propertyId                 String
+  isActive                   Boolean                     @default(true)
+  availableFrom              DateTime?
+  availableUntil             DateTime?
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  applicantPropertyInterests ApplicantPropertyInterest[]
+  organization               Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  program                    Program                     @relation(fields: [organizationId, programId], references: [organizationId, id], onDelete: Cascade)
+  property                   Property                    @relation(fields: [organizationId, propertyId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([programId, propertyId])
+  @@index([organizationId, isActive])
+  @@index([programId, isActive])
+  @@index([propertyId, isActive])
 }
 
 model Department {
@@ -415,47 +447,63 @@ model Application {
 }
 
 model ProgramApplication {
-  id               String             @id @default(cuid())
-  userId           String
-  programId        String
-  status           String             @default("draft")
-  data             Json               @default("{}")
-  currentPage      Int                @default(0)
-  submittedAt      DateTime?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
-  assignedToId     String?
-  decision         String?
-  decisionReason   String?
-  internalNotes    String?
-  reviewedAt       DateTime?
-  reviewedById     String?
-  assignedAt       DateTime?
-  deadline         DateTime?
-  lastActivityAt   DateTime           @default(now()) @updatedAt
-  slaBreachedAt    DateTime?
-  waitlistedAt     DateTime?
-  departmentId     String?
-  teamId           String?
-  events           ApplicationEvent[]
-  caseConversation CaseConversation?
-  caseDecisions    CaseDecision[]
-  caseFlags        CaseFlag[]
-  documents        Document[]
-  documentRequests DocumentRequest[]
-  assignedTo       User?              @relation("AssignedApplications", fields: [assignedToId], references: [id])
-  program          Program            @relation(fields: [programId], references: [id])
-  reviewedBy       User?              @relation("ReviewedApplications", fields: [reviewedById], references: [id])
-  user             User               @relation(fields: [userId], references: [id])
-  qaReviews        QAReview[]
-  reviewChecklist  ReviewChecklist?
-  staffNotes       StaffNote[]
-  waitlistEntry    WaitlistEntry?
+  id                         String                      @id @default(cuid())
+  userId                     String
+  programId                  String
+  status                     String                      @default("draft")
+  data                       Json                        @default("{}")
+  currentPage                Int                         @default(0)
+  submittedAt                DateTime?
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  assignedToId               String?
+  decision                   String?
+  decisionReason             String?
+  internalNotes              String?
+  reviewedAt                 DateTime?
+  reviewedById               String?
+  assignedAt                 DateTime?
+  deadline                   DateTime?
+  lastActivityAt             DateTime                    @default(now()) @updatedAt
+  slaBreachedAt              DateTime?
+  waitlistedAt               DateTime?
+  departmentId               String?
+  teamId                     String?
+  applicantPropertyInterests ApplicantPropertyInterest[]
+  events                     ApplicationEvent[]
+  caseConversation           CaseConversation?
+  caseDecisions              CaseDecision[]
+  caseFlags                  CaseFlag[]
+  documents                  Document[]
+  documentRequests           DocumentRequest[]
+  assignedTo                 User?                       @relation("AssignedApplications", fields: [assignedToId], references: [id])
+  program                    Program                     @relation(fields: [programId], references: [id])
+  reviewedBy                 User?                       @relation("ReviewedApplications", fields: [reviewedById], references: [id])
+  user                       User                        @relation(fields: [userId], references: [id])
+  qaReviews                  QAReview[]
+  reviewChecklist            ReviewChecklist?
+  staffNotes                 StaffNote[]
+  waitlistEntry              WaitlistEntry?
 
   @@unique([userId, programId])
   @@index([userId, status])
   @@index([programId, status])
   @@index([assignedToId])
+}
+
+model ApplicantPropertyInterest {
+  id                   String             @id @default(cuid())
+  programApplicationId String
+  programPropertyId    String
+  status               String             @default("INTERESTED")
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  programApplication   ProgramApplication @relation(fields: [programApplicationId], references: [id], onDelete: Cascade)
+  programProperty      ProgramProperty    @relation(fields: [programPropertyId], references: [id], onDelete: Cascade)
+
+  @@unique([programApplicationId, programPropertyId], map: "ApplicantPropertyInterest_programApplicationId_programPropertyI")
+  @@index([programApplicationId, status])
+  @@index([programPropertyId, status])
 }
 
 model ApplicationEvent {

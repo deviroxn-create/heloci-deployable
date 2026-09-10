@@ -200,7 +200,7 @@ export function DocumentReviewWorkspace({
 
       {/* Document Review Workspace */}
       {/* Desktop: Two Column Layout, Mobile: Single Column with Slide-over */}
-      <div className="space-y-6 lg:space-y-0 lg:grid lg:grid-cols-[1fr_500px] lg:gap-6">
+      <div className="space-y-6 lg:space-y-0 lg:grid lg:gap-6 grid-cols-1 lg:grid-cols-[1fr_500px] w-full">
         {/* Left: Document List - Always visible on desktop, hidden when document selected on mobile */}
         <div className={`${selectedDocument ? 'hidden lg:block' : 'block'}`}>
           <DocumentListProfessional

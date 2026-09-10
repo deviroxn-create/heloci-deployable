@@ -214,7 +214,7 @@ export default function CaseDetailPageEnhanced() {
       {/* Main Content - Responsive Grid */}
       <div className="max-w-[1600px] mx-auto px-6 py-6">
         {/* Desktop: 3-column | Tablet: 2-column | Mobile: Stacked */}
-        <div className="grid gap-6 lg:grid-cols-[320px_1fr_340px] md:grid-cols-[300px_1fr] grid-cols-1">
+        <div className="grid gap-6 grid-cols-1 xl:grid-cols-[300px_1fr_320px] px-6 py-6 w-full mx-auto">
           {/* LEFT SIDEBAR - Applicant Summary */}
           <div className="lg:sticky lg:top-24 h-fit">
             <ApplicantSummaryCard
@@ -242,25 +242,27 @@ export default function CaseDetailPageEnhanced() {
           <div className="space-y-6">
             {/* View Selector */}
             <div className="rounded-[28px] border border-border bg-white p-2 shadow-soft">
-              <div className="flex gap-2 overflow-x-auto">
-                {[
-                  { id: "review", label: "Review Workspace" },
-                  { id: "communication", label: "Communication" },
-                  { id: "documents", label: "Documents" },
-                  { id: "timeline", label: "Timeline" },
-                ].map((view) => (
-                  <button
-                    key={view.id}
-                    onClick={() => setActiveView(view.id as any)}
-                    className={`shrink-0 px-4 py-2.5 rounded-xl text-sm font-medium transition ${
-                      activeView === view.id
-                        ? "bg-brand text-white shadow-md"
-                        : "text-slate-600 hover:bg-slate-50"
-                    }`}
-                  >
-                    {view.label}
-                  </button>
-                ))}
+              <div className="overflow-x-auto scrollbar-thin">
+                <div className="flex gap-2 flex-nowrap">
+                  {[
+                    { id: "review", label: "Review Workspace" },
+                    { id: "communication", label: "Communication" },
+                    { id: "documents", label: "Documents" },
+                    { id: "timeline", label: "Timeline" },
+                  ].map((view) => (
+                    <button
+                      key={view.id}
+                      onClick={() => setActiveView(view.id as any)}
+                      className={`shrink-0 px-4 py-2.5 rounded-xl text-sm font-medium transition whitespace-nowrap ${
+                        activeView === view.id
+                          ? "bg-brand text-white shadow-md"
+                          : "text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      {view.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 

@@ -1,16 +1,28 @@
 import Link from "next/link";
-import { MapPin, ShieldCheck } from "lucide-react";
-import { prisma } from "@/lib/prisma/client";
+import { MapPin, ShieldCheck, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageShell } from "@/components/shared/page-shell";
 import { PropertyCard } from "@/components/property/property-card";
+import { listPublicProperties, countPublicProperties } from "@/lib/properties/public-property.service";
 
-export default async function Page() {
-  const properties = await prisma.property.findMany({
-    where: { status: "AVAILABLE" },
-    include: { images: true },
-    take: 6
-  });
+const PAGE_SIZE = 12;
+
+export default async function Page({
+  searchParams
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  const pageParam = typeof params.page === "string" ? parseInt(params.page, 10) : 1;
+  const currentPage = Math.max(1, isNaN(pageParam) ? 1 : pageParam);
+  const offset = (currentPage - 1) * PAGE_SIZE;
+
+  const [properties, totalCount] = await Promise.all([
+    listPublicProperties({ limit: PAGE_SIZE, offset }),
+    countPublicProperties()
+  ]);
+
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   return (
     <PageShell>
@@ -43,12 +55,59 @@ export default async function Page() {
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand">Published properties</p>
             <h2 className="mt-3 text-3xl font-semibold text-slate-950">Housing opportunities available through Heloci.</h2>
+            {totalCount > 0 && (
+              <p className="mt-2 text-sm text-slate-600">
+                Showing {offset + 1}–{Math.min(offset + PAGE_SIZE, totalCount)} of {totalCount} properties
+              </p>
+            )}
           </div>
         </div>
         {properties.length > 0 ? (
-          <div className="mt-8 grid gap-6 lg:grid-cols-3">
-            {properties.map((property) => <PropertyCard key={property.id} property={property} />)}
-          </div>
+          <>
+            <div className="mt-8 grid gap-6 lg:grid-cols-3">
+              {properties.map((property) => (
+                <PropertyCard key={property.id} property={property} />
+              ))}
+            </div>
+            {totalPages > 1 && (
+              <div className="mt-8 flex items-center justify-center gap-2">
+                <Button
+                  asChild
+                  variant="outline"
+                  disabled={currentPage <= 1}
+                  className="disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Link href={`/properties?page=${currentPage - 1}`}>
+                    <ChevronLeft className="h-4 w-4 mr-1" />
+                    Previous
+                  </Link>
+                </Button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <Button
+                      key={page}
+                      asChild
+                      variant={page === currentPage ? "primary" : "outline"}
+                      size="sm"
+                    >
+                      <Link href={`/properties?page=${page}`}>{page}</Link>
+                    </Button>
+                  ))}
+                </div>
+                <Button
+                  asChild
+                  variant="outline"
+                  disabled={currentPage >= totalPages}
+                  className="disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Link href={`/properties?page=${currentPage + 1}`}>
+                    Next
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </Link>
+                </Button>
+              </div>
+            )}
+          </>
         ) : (
           <div className="mt-8 rounded-[28px] border border-border bg-white px-6 py-12 text-center">
             <p className="text-base text-slate-600">Housing opportunities will appear here once properties are published.</p>

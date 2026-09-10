@@ -318,6 +318,20 @@ export default function EligibilityAssistantV2({
     }
   }, [stepIndex, showWelcome]);
 
+  /* ── Keyboard navigation for sidebar ── */
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && sidebarOpen) {
+        setSidebarOpen(false);
+      }
+    };
+
+    if (sidebarOpen) {
+      window.addEventListener("keydown", handleKeyDown);
+      return () => window.removeEventListener("keydown", handleKeyDown);
+    }
+  }, [sidebarOpen]);
+
   /* ── Track stage changes ── */
   useEffect(() => {
     if (currentStageId && currentStageId !== prevStageId) {
@@ -516,7 +530,7 @@ export default function EligibilityAssistantV2({
   return (
     <div className="min-h-screen">
       {/* Sticky progress bar */}
-      <div className="sticky top-0 z-30 border-b border-slate-100 bg-white/95 px-4 py-3 backdrop-blur-sm sm:px-8">
+      <div className="sticky top-0 z-10 border-b border-slate-100 bg-white/95 px-4 py-3 backdrop-blur-sm sm:px-8">
         <div className="mx-auto max-w-6xl">
           <StageProgress
             stageIndex={stageInfo.stageIndex}
@@ -699,11 +713,25 @@ export default function EligibilityAssistantV2({
       {/* Mobile drawer */}
       {sidebarOpen && (
         <>
-          <div className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} aria-hidden="true" />
-          <div className="fixed bottom-0 left-0 right-0 z-40 max-h-[80vh] overflow-y-auto rounded-t-3xl bg-white p-6 shadow-2xl lg:hidden">
+          <div 
+            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm lg:hidden" 
+            onClick={() => setSidebarOpen(false)} 
+            aria-hidden="true" 
+          />
+          <div 
+            className="fixed bottom-0 left-0 right-0 z-50 max-h-[80vh] overflow-y-auto rounded-t-3xl bg-white p-6 shadow-2xl lg:hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sidebar-title"
+          >
             <div className="mb-4 flex items-center justify-between">
-              <p className="text-sm font-semibold text-slate-900">Your progress</p>
-              <button type="button" onClick={() => setSidebarOpen(false)} className="rounded-full p-1 text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
+              <p id="sidebar-title" className="text-sm font-semibold text-slate-900">Your progress</p>
+              <button 
+                type="button" 
+                onClick={() => setSidebarOpen(false)} 
+                aria-label="Close progress panel"
+                className="rounded-full p-1 text-slate-400 hover:text-slate-600"
+              ><X className="h-5 w-5" /></button>
             </div>
             <ProfileSidebar
               completionScore={completionScore}

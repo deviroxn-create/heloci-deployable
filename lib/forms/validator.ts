@@ -84,3 +84,71 @@ export function validatePage(questions: RenderedQuestion[], data: Record<string,
 
   return { valid: false, errors };
 }
+
+/**
+ * Validate application form data including custom validation rules
+ */
+export function validateApplicationForm(data: Record<string, unknown>): {
+  valid: boolean;
+  errors: Record<string, string>;
+} {
+  const errors: Record<string, string> = {};
+
+  // SSN validation: must be exactly 9 digits
+  if (data["personal.ssn"]) {
+    const ssn = String(data["personal.ssn"]).replace(/\D/g, "");
+    if (ssn.length !== 9) {
+      errors["personal.ssn"] = "Enter a 9-digit Social Security Number";
+    }
+  }
+
+  // SSN confirmation: must match
+  if (data["personal.ssn"] && data["personal.ssnConfirm"]) {
+    const ssn = String(data["personal.ssn"]).replace(/\D/g, "");
+    const confirm = String(data["personal.ssnConfirm"]).replace(/\D/g, "");
+    
+    if (ssn !== confirm) {
+      errors["personal.ssnConfirm"] = "SSNs do not match";
+    }
+  }
+
+  // Phone validation: must be exactly 10 digits when provided
+  const phoneFields = [
+    { key: "personal.phone", required: true },
+    { key: "personal.secondaryPhone", required: false },
+    { key: "housing.landlordPhone", required: false },
+  ];
+  
+  for (const field of phoneFields) {
+    const value = data[field.key];
+    
+    if (value) {
+      const phone = String(value).replace(/\D/g, "");
+      if (phone.length !== 10) {
+        errors[field.key] = "Enter a 10-digit US phone number";
+      }
+    } else if (field.required) {
+      errors[field.key] = "Phone number is required";
+    }
+  }
+
+  // Date of birth validation
+  if (data["personal.dateOfBirth"]) {
+    const dob = new Date(String(data["personal.dateOfBirth"]));
+    const today = new Date();
+    
+    if (dob > today) {
+      errors["personal.dateOfBirth"] = "Date of birth cannot be in the future";
+    }
+    
+    const age = Math.floor((today.getTime() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+    if (age < 15) {
+      errors["personal.dateOfBirth"] = "You must be at least 15 years old";
+    }
+  }
+
+  return {
+    valid: Object.keys(errors).length === 0,
+    errors
+  };
+}

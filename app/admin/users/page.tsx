@@ -68,10 +68,10 @@ export default async function AdminUsersPage() {
 
       <div className="rounded-[28px] border border-border bg-white shadow-soft overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm whitespace-nowrap">
             <thead>
               <tr className="border-b border-border bg-slate-50">
-                <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">User</th>
+                <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 sticky left-0 z-10 bg-slate-50">User</th>
                 <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Role</th>
                 <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Joined</th>
                 <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Status</th>
@@ -80,7 +80,7 @@ export default async function AdminUsersPage() {
             <tbody className="divide-y divide-border">
               {users.map((account) => (
                 <tr key={account.id} className="transition hover:bg-slate-50">
-                  <td className="px-5 py-4">
+                  <td className="px-5 py-4 sticky left-0 z-10 bg-white hover:bg-slate-50">
                     <div className="flex items-center gap-3">
                       <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-xs font-bold text-brand">
                         {(account.name || account.email).charAt(0).toUpperCase()}

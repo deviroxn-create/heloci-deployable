@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { registerSchema } from "@/lib/validations/schemas";
 import { supabase } from "@/lib/supabase/client";
 import { registerUser } from "@/actions/auth.actions";
+import { getAuthRedirectOrigin } from "@/lib/constants/site";
 import type { z } from "zod";
 
 type RegisterValues = z.infer<typeof registerSchema>;
@@ -48,7 +49,7 @@ export function RegisterForm() {
       password: values.password,
       options: {
         data: { full_name: values.fullName },
-        emailRedirectTo: `${window.location.origin}/auth/callback`
+        emailRedirectTo: `${getAuthRedirectOrigin()}/auth/callback`
       }
     });
 

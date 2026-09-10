@@ -13,7 +13,7 @@ export function PropertyCard({ property }: { property: PropertyCardData }) {
   const image = property.images[0];
 
   return (
-    <article className="group overflow-hidden rounded-[24px] border border-border bg-white shadow-card transition hover:-translate-y-1 hover:shadow-soft">
+    <article className="group flex flex-col overflow-hidden rounded-[24px] border border-border bg-white shadow-card transition hover:-translate-y-1 hover:shadow-soft h-full">
       <Link href={`/properties/${property.id}`} className="block">
         <div className="relative aspect-[4/3] overflow-hidden bg-gradient-to-br from-[#EFF6FF] to-[#DBEAFE]">
           {image ? (
@@ -27,25 +27,25 @@ export function PropertyCard({ property }: { property: PropertyCardData }) {
           ) : null}
         </div>
       </Link>
-      <div className="space-y-4 p-6">
+      <div className="flex flex-col flex-grow p-6 space-y-4">
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <Link href={`/properties/${property.id}`} className="text-xl font-semibold text-slate-950 hover:text-brand">
+          <div className="flex-1">
+            <Link href={`/properties/${property.id}`} className="text-xl font-semibold text-slate-950 hover:text-brand line-clamp-2">
               {property.title}
             </Link>
-            <p className="mt-2 text-sm text-slate-600">{property.city}, {property.state}</p>
+            <p className="mt-1 text-sm text-slate-600 line-clamp-1">{property.city}, {property.state}</p>
           </div>
-          <span className="shrink-0 rounded-full bg-brand/10 px-3 py-1 text-sm font-semibold text-brand">{property.status}</span>
+          <span className="shrink-0 rounded-full bg-brand/10 px-3 py-1 text-sm font-semibold text-brand whitespace-nowrap">{property.status}</span>
         </div>
-        <p className="line-clamp-3 text-sm leading-6 text-slate-600">{property.description}</p>
+        <p className="line-clamp-2 text-sm leading-6 text-slate-600 flex-grow">{property.description}</p>
         <div className="grid gap-3 text-sm text-slate-500 sm:grid-cols-3">
           <div>{property.bedrooms} beds</div>
           <div>{property.bathrooms} baths</div>
           <div>{property.sqft} sqft</div>
         </div>
-        <div className="flex items-center justify-between gap-4 pt-2">
+        <div className="flex items-center justify-between gap-4 pt-2 mt-auto">
           <span className="text-lg font-semibold text-slate-950">{currency(property.rent)}/mo</span>
-          <Link href={`/properties/${property.id}`} className="inline-flex items-center gap-2 text-sm font-semibold text-brand transition group-hover:text-brandHover">
+          <Link href={`/properties/${property.id}`} className="inline-flex items-center gap-2 text-sm font-semibold text-brand transition group-hover:text-brandHover whitespace-nowrap">
             View details <ArrowRight className="h-4 w-4" />
           </Link>
         </div>

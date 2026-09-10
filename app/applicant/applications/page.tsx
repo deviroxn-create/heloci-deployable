@@ -201,6 +201,13 @@ export default function ApplicationsPage() {
                         <Link href="/applicant/documents">Upload documents</Link>
                       </Button>
                     )}
+                    {app.status.toLowerCase() === "approved" && (
+                      <Button asChild>
+                        <Link href="/applicant/properties" className="inline-flex items-center gap-2">
+                          Browse available properties <ArrowRight className="h-4 w-4" />
+                        </Link>
+                      </Button>
+                    )}
                     {!isDraft && (
                       <Button asChild variant="outline">
                         <Link href="/applicant/documents">View documents</Link>

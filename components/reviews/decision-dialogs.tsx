@@ -8,7 +8,8 @@ import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, Loader2, Plus, X } from "lucide-react";
+import { AlertCircle, Loader2, Plus, X, CheckCircle } from "lucide-react";
+import { useToast } from "@/components/ui/toast";
 import { apiApproveApplication, apiConditionallyApproveApplication, apiRejectApplication, apiWaitlistApplication, apiEscalateApplication, apiRequestAdditionalInfo, apiWithdrawApplication, apiCloseCase, getErrorMessage } from "@/lib/reviews/decision-api-client";
 import { TemplateSelector } from "./template-selector";
 import type { DecisionType } from "@/lib/reviews/decision.types";
@@ -42,7 +43,9 @@ interface ApproveDialogProps extends BaseDialogProps {
 }
 
 export function ApproveDialog({ open, onOpenChange, applicationId, organizationId, onSuccess, applicantName = "Applicant" }: ApproveDialogProps) {
+  const { addToast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [effectiveDate, setEffectiveDate] = useState("");
   const [applicantMessage, setApplicantMessage] = useState("Congratulations! Your application has been approved.");
@@ -58,6 +61,7 @@ export function ApproveDialog({ open, onOpenChange, applicationId, organizationI
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccess(false);
     setLoading(true);
 
     try {
@@ -69,15 +73,43 @@ export function ApproveDialog({ open, onOpenChange, applicationId, organizationI
       });
 
       if (!response.success) {
-        setError(getErrorMessage(response));
+        const errorMsg = getErrorMessage(response);
+        setError(errorMsg);
+        addToast({
+          type: "error",
+          title: "Approval Failed",
+          message: errorMsg,
+        });
+        setLoading(false);
         return;
       }
 
-      onSuccess();
-      onOpenChange(false);
+      // Show success toast immediately
+      addToast({
+        type: "success",
+        title: "Application Approved ✓",
+        message: `${applicantName} has been approved successfully`,
+        duration: 4000,
+      });
+
+      setSuccess(true);
+      
+      // Close dialog immediately, don't wait
+      setLoading(false);
+      setTimeout(() => {
+        onOpenChange(false);
+        setSuccess(false);
+        // Call onSuccess after dialog closes so parent can refresh if needed
+        onSuccess();
+      }, 500);
     } catch (err: any) {
-      setError(getErrorMessage(err));
-    } finally {
+      const errorMsg = getErrorMessage(err);
+      setError(errorMsg);
+      addToast({
+        type: "error",
+        title: "Approval Failed",
+        message: errorMsg,
+      });
       setLoading(false);
     }
   };
@@ -85,49 +117,61 @@ export function ApproveDialog({ open, onOpenChange, applicationId, organizationI
   return (
     <ModalOverlay open={open} onClose={() => onOpenChange(false)}>
       <Card className="p-6">
-        <h2 className="text-xl font-bold">Approve Application</h2>
-        <p className="text-sm text-slate-600 mt-1">Confirm approval for {applicantName}. They will receive a notification.</p>
-
-        <form onSubmit={handleSubmit} className="space-y-4 mt-6">
-          {error && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{error}</AlertDescription></Alert>}
-
-          <div>
-            <Label className="text-sm font-medium">Use Template (Optional)</Label>
-            <TemplateSelector
-              organizationId={organizationId}
-              decisionType="approved"
-              onTemplateSelect={handleTemplateSelect}
-              loading={loading}
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="effective-date">Effective Date (Optional)</Label>
-            <Input id="effective-date" type="date" value={effectiveDate} onChange={(e) => setEffectiveDate(e.target.value)} disabled={loading} />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <input type="checkbox" id="send-notification" checked={sendNotification} onChange={(e) => setSendNotification(e.target.checked)} disabled={loading} className="h-4 w-4 rounded" />
-            <Label htmlFor="send-notification" className="font-normal">Send notification to applicant</Label>
-          </div>
-
-          {sendNotification && (
-            <div>
-              <Label htmlFor="applicant-message">Message to Applicant</Label>
-              <Textarea id="applicant-message" placeholder="Enter message..." value={applicantMessage} onChange={(e) => setApplicantMessage(e.target.value)} disabled={loading} rows={3} />
+        {success ? (
+          <div className="text-center py-8">
+            <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-success/10 mb-4">
+              <CheckCircle className="h-8 w-8 text-success" />
             </div>
-          )}
-
-          <div>
-            <Label htmlFor="internal-notes">Internal Notes (Reviewers Only)</Label>
-            <Textarea id="internal-notes" placeholder="Add notes..." value={internalNotes} onChange={(e) => setInternalNotes(e.target.value)} disabled={loading} rows={2} />
+            <h2 className="text-xl font-bold text-success">Application Approved</h2>
+            <p className="text-sm text-slate-600 mt-2">The decision has been recorded successfully.</p>
           </div>
+        ) : (
+          <>
+            <h2 className="text-xl font-bold">Approve Application</h2>
+            <p className="text-sm text-slate-600 mt-1">Confirm approval for {applicantName}. They will receive a notification.</p>
 
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>Cancel</Button>
-            <Button type="submit" disabled={loading} className="gap-2">{loading && <Loader2 className="h-4 w-4 animate-spin" />}Approve</Button>
-          </div>
-        </form>
+            <form onSubmit={handleSubmit} className="space-y-4 mt-6">
+              {error && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{error}</AlertDescription></Alert>}
+
+              <div>
+                <Label className="text-sm font-medium">Use Template (Optional)</Label>
+                <TemplateSelector
+                  organizationId={organizationId}
+                  decisionType="approved"
+                  onTemplateSelect={handleTemplateSelect}
+                  loading={loading}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="effective-date">Effective Date (Optional)</Label>
+                <Input id="effective-date" type="date" value={effectiveDate} onChange={(e) => setEffectiveDate(e.target.value)} disabled={loading} />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input type="checkbox" id="send-notification" checked={sendNotification} onChange={(e) => setSendNotification(e.target.checked)} disabled={loading} className="h-4 w-4 rounded" />
+                <Label htmlFor="send-notification" className="font-normal">Send notification to applicant</Label>
+              </div>
+
+              {sendNotification && (
+                <div>
+                  <Label htmlFor="applicant-message">Message to Applicant</Label>
+                  <Textarea id="applicant-message" placeholder="Enter message..." value={applicantMessage} onChange={(e) => setApplicantMessage(e.target.value)} disabled={loading} rows={3} />
+                </div>
+              )}
+
+              <div>
+                <Label htmlFor="internal-notes">Internal Notes (Reviewers Only)</Label>
+                <Textarea id="internal-notes" placeholder="Add notes..." value={internalNotes} onChange={(e) => setInternalNotes(e.target.value)} disabled={loading} rows={2} />
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>Cancel</Button>
+                <Button type="submit" disabled={loading} className="gap-2">{loading && <Loader2 className="h-4 w-4 animate-spin" />}{loading ? "Approving..." : "Approve"}</Button>
+              </div>
+            </form>
+          </>
+        )}
       </Card>
     </ModalOverlay>
   );
@@ -138,7 +182,9 @@ export function ApproveDialog({ open, onOpenChange, applicationId, organizationI
 // ============================================================================
 
 export function ConditionalApprovalDialog({ open, onOpenChange, applicationId, organizationId, onSuccess, applicantName = "Applicant" }: BaseDialogProps & { applicantName?: string }) {
+  const { addToast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conditions, setConditions] = useState<string[]>([""]); 
   const [expirationDate, setExpirationDate] = useState("");
@@ -154,9 +200,28 @@ export function ConditionalApprovalDialog({ open, onOpenChange, applicationId, o
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccess(false);
     const filledConditions = conditions.filter((c) => c.trim());
-    if (filledConditions.length === 0) { setError("Please add at least one condition"); return; }
-    if (!applicantMessage.trim()) { setError("Please provide a message to the applicant"); return; }
+    if (filledConditions.length === 0) { 
+      const errMsg = "Please add at least one condition";
+      setError(errMsg);
+      addToast({
+        type: "error",
+        title: "Missing Conditions",
+        message: errMsg,
+      });
+      return; 
+    }
+    if (!applicantMessage.trim()) { 
+      const errMsg = "Please provide a message to the applicant";
+      setError(errMsg);
+      addToast({
+        type: "error",
+        title: "Missing Message",
+        message: errMsg,
+      });
+      return; 
+    }
     setLoading(true);
 
     try {
@@ -168,12 +233,44 @@ export function ConditionalApprovalDialog({ open, onOpenChange, applicationId, o
         internalNotes: internalNotes || undefined,
       });
 
-      if (!response.success) { setError(getErrorMessage(response)); return; }
-      onSuccess();
-      onOpenChange(false);
+      if (!response.success) { 
+        const errorMsg = getErrorMessage(response);
+        setError(errorMsg);
+        addToast({
+          type: "error",
+          title: "Conditional Approval Failed",
+          message: errorMsg,
+        });
+        setLoading(false);
+        return; 
+      }
+      
+      // Show success toast immediately
+      addToast({
+        type: "success",
+        title: "Conditionally Approved ✓",
+        message: `${applicantName} has been conditionally approved`,
+        duration: 4000,
+      });
+      
+      setSuccess(true);
+      
+      // Close dialog immediately
+      setLoading(false);
+      setTimeout(() => {
+        onOpenChange(false);
+        setSuccess(false);
+        // Call onSuccess after dialog closes so parent can refresh if needed
+        onSuccess();
+      }, 500);
     } catch (err: any) {
-      setError(getErrorMessage(err));
-    } finally {
+      const errorMsg = getErrorMessage(err);
+      setError(errorMsg);
+      addToast({
+        type: "error",
+        title: "Conditional Approval Failed",
+        message: errorMsg,
+      });
       setLoading(false);
     }
   };
@@ -181,46 +278,58 @@ export function ConditionalApprovalDialog({ open, onOpenChange, applicationId, o
   return (
     <ModalOverlay open={open} onClose={() => onOpenChange(false)}>
       <Card className="p-6">
-        <h2 className="text-xl font-bold">Conditional Approval</h2>
-        <p className="text-sm text-slate-600 mt-1">Approve with conditions for {applicantName}</p>
-
-        <form onSubmit={handleSubmit} className="space-y-4 mt-6">
-          {error && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{error}</AlertDescription></Alert>}
-
-          <div>
-            <Label className="text-sm font-medium">Use Template (Optional)</Label>
-            <TemplateSelector
-              organizationId={organizationId}
-              decisionType="conditional_approval"
-              onTemplateSelect={handleTemplateSelect}
-              loading={loading}
-            />
-          </div>
-
-          <div>
-            <Label className="font-semibold">Conditions (Required)</Label>
-            <div className="space-y-2 mt-2">
-              {conditions.map((condition, idx) => (
-                <div key={idx} className="flex gap-2">
-                  <Input placeholder={`Condition ${idx + 1}...`} value={condition} onChange={(e) => { const u = [...conditions]; u[idx] = e.target.value; setConditions(u); }} disabled={loading} />
-                  {conditions.length > 1 && <Button type="button" variant="ghost" size="sm" onClick={() => setConditions(conditions.filter((_, i) => i !== idx))} disabled={loading}><X className="h-4 w-4" /></Button>}
-                </div>
-              ))}
+        {success ? (
+          <div className="text-center py-8">
+            <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-warning/10 mb-4">
+              <AlertCircle className="h-8 w-8 text-warning" />
             </div>
-            <Button type="button" variant="outline" size="sm" onClick={() => setConditions([...conditions, ""])} disabled={loading} className="mt-2 gap-1"><Plus className="h-4 w-4" />Add</Button>
+            <h2 className="text-xl font-bold text-warning">Conditionally Approved</h2>
+            <p className="text-sm text-slate-600 mt-2">The decision has been recorded successfully.</p>
           </div>
+        ) : (
+          <>
+            <h2 className="text-xl font-bold">Conditional Approval</h2>
+            <p className="text-sm text-slate-600 mt-1">Approve with conditions for {applicantName}</p>
 
-          <div><Label htmlFor="exp-date">Deadline (Optional)</Label><Input id="exp-date" type="date" value={expirationDate} onChange={(e) => setExpirationDate(e.target.value)} disabled={loading} /></div>
+            <form onSubmit={handleSubmit} className="space-y-4 mt-6">
+              {error && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{error}</AlertDescription></Alert>}
 
-          <div><Label htmlFor="app-msg">Message to Applicant</Label><Textarea id="app-msg" placeholder="Explain the conditions..." value={applicantMessage} onChange={(e) => setApplicantMessage(e.target.value)} disabled={loading} rows={3} /></div>
+              <div>
+                <Label className="text-sm font-medium">Use Template (Optional)</Label>
+                <TemplateSelector
+                  organizationId={organizationId}
+                  decisionType="conditional_approval"
+                  onTemplateSelect={handleTemplateSelect}
+                  loading={loading}
+                />
+              </div>
 
-          <div><Label htmlFor="int-notes">Internal Notes</Label><Textarea id="int-notes" placeholder="Add notes..." value={internalNotes} onChange={(e) => setInternalNotes(e.target.value)} disabled={loading} rows={2} /></div>
+              <div>
+                <Label className="font-semibold">Conditions (Required)</Label>
+                <div className="space-y-2 mt-2">
+                  {conditions.map((condition, idx) => (
+                    <div key={idx} className="flex gap-2">
+                      <Input placeholder={`Condition ${idx + 1}...`} value={condition} onChange={(e) => { const u = [...conditions]; u[idx] = e.target.value; setConditions(u); }} disabled={loading} />
+                      {conditions.length > 1 && <Button type="button" variant="ghost" size="sm" onClick={() => setConditions(conditions.filter((_, i) => i !== idx))} disabled={loading}><X className="h-4 w-4" /></Button>}
+                    </div>
+                  ))}
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={() => setConditions([...conditions, ""])} disabled={loading} className="mt-2 gap-1"><Plus className="h-4 w-4" />Add</Button>
+              </div>
 
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>Cancel</Button>
-            <Button type="submit" disabled={loading} className="gap-2">{loading && <Loader2 className="h-4 w-4 animate-spin" />}Approve</Button>
-          </div>
-        </form>
+              <div><Label htmlFor="exp-date">Deadline (Optional)</Label><Input id="exp-date" type="date" value={expirationDate} onChange={(e) => setExpirationDate(e.target.value)} disabled={loading} /></div>
+
+              <div><Label htmlFor="app-msg">Message to Applicant</Label><Textarea id="app-msg" placeholder="Explain the conditions..." value={applicantMessage} onChange={(e) => setApplicantMessage(e.target.value)} disabled={loading} rows={3} /></div>
+
+              <div><Label htmlFor="int-notes">Internal Notes</Label><Textarea id="int-notes" placeholder="Add notes..." value={internalNotes} onChange={(e) => setInternalNotes(e.target.value)} disabled={loading} rows={2} /></div>
+
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>Cancel</Button>
+                <Button type="submit" disabled={loading} className="gap-2">{loading && <Loader2 className="h-4 w-4 animate-spin" />}{loading ? "Approving..." : "Approve"}</Button>
+              </div>
+            </form>
+          </>
+        )}
       </Card>
     </ModalOverlay>
   );
@@ -231,7 +340,9 @@ export function ConditionalApprovalDialog({ open, onOpenChange, applicationId, o
 // ============================================================================
 
 export function RejectDialog({ open, onOpenChange, applicationId, organizationId, onSuccess, applicantName = "Applicant" }: BaseDialogProps & { applicantName?: string }) {
+  const { addToast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [applicantMessage, setApplicantMessage] = useState("Your application has been reviewed and unfortunately does not meet the program requirements at this time.");
@@ -247,7 +358,17 @@ export function RejectDialog({ open, onOpenChange, applicationId, organizationId
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!reason.trim()) { setError("Please provide a reason for rejection"); return; }
+    setSuccess(false);
+    if (!reason.trim()) { 
+      const errMsg = "Please provide a reason for rejection";
+      setError(errMsg);
+      addToast({
+        type: "error",
+        title: "Missing Information",
+        message: errMsg,
+      });
+      return; 
+    }
     setLoading(true);
 
     try {
@@ -258,12 +379,44 @@ export function RejectDialog({ open, onOpenChange, applicationId, organizationId
         internalNotes: internalNotes || undefined,
       });
 
-      if (!response.success) { setError(getErrorMessage(response)); return; }
-      onSuccess();
-      onOpenChange(false);
+      if (!response.success) { 
+        const errorMsg = getErrorMessage(response);
+        setError(errorMsg);
+        addToast({
+          type: "error",
+          title: "Rejection Failed",
+          message: errorMsg,
+        });
+        setLoading(false);
+        return; 
+      }
+      
+      // Show success toast immediately
+      addToast({
+        type: "success",
+        title: "Application Rejected ✓",
+        message: `${applicantName} has been rejected`,
+        duration: 4000,
+      });
+      
+      setSuccess(true);
+      
+      // Close dialog immediately
+      setLoading(false);
+      setTimeout(() => {
+        onOpenChange(false);
+        setSuccess(false);
+        // Call onSuccess after dialog closes so parent can refresh if needed
+        onSuccess();
+      }, 500);
     } catch (err: any) {
-      setError(getErrorMessage(err));
-    } finally {
+      const errorMsg = getErrorMessage(err);
+      setError(errorMsg);
+      addToast({
+        type: "error",
+        title: "Rejection Failed",
+        message: errorMsg,
+      });
       setLoading(false);
     }
   };
@@ -271,38 +424,50 @@ export function RejectDialog({ open, onOpenChange, applicationId, organizationId
   return (
     <ModalOverlay open={open} onClose={() => onOpenChange(false)}>
       <Card className="p-6">
-        <h2 className="text-xl font-bold">Reject Application</h2>
-        <p className="text-sm text-slate-600 mt-1">Reject the application for {applicantName}</p>
-
-        <form onSubmit={handleSubmit} className="space-y-4 mt-6">
-          {error && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{error}</AlertDescription></Alert>}
-
-          <div>
-            <Label className="text-sm font-medium">Use Template (Optional)</Label>
-            <TemplateSelector
-              organizationId={organizationId}
-              decisionType="rejected"
-              onTemplateSelect={handleTemplateSelect}
-              loading={loading}
-            />
+        {success ? (
+          <div className="text-center py-8">
+            <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-error/10 mb-4">
+              <AlertCircle className="h-8 w-8 text-error" />
+            </div>
+            <h2 className="text-xl font-bold text-error">Application Rejected</h2>
+            <p className="text-sm text-slate-600 mt-2">The decision has been recorded successfully.</p>
           </div>
+        ) : (
+          <>
+            <h2 className="text-xl font-bold">Reject Application</h2>
+            <p className="text-sm text-slate-600 mt-1">Reject the application for {applicantName}</p>
 
-          <div><Label htmlFor="reason">Rejection Reason (Required)</Label><Textarea id="reason" placeholder="Why is this application being rejected?" value={reason} onChange={(e) => setReason(e.target.value)} disabled={loading} rows={3} /></div>
+            <form onSubmit={handleSubmit} className="space-y-4 mt-6">
+              {error && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{error}</AlertDescription></Alert>}
 
-          <div className="flex items-center gap-2">
-            <input type="checkbox" id="send-notif" checked={sendNotification} onChange={(e) => setSendNotification(e.target.checked)} disabled={loading} className="h-4 w-4 rounded" />
-            <Label htmlFor="send-notif" className="font-normal">Send notification to applicant</Label>
-          </div>
+              <div>
+                <Label className="text-sm font-medium">Use Template (Optional)</Label>
+                <TemplateSelector
+                  organizationId={organizationId}
+                  decisionType="rejected"
+                  onTemplateSelect={handleTemplateSelect}
+                  loading={loading}
+                />
+              </div>
 
-          {sendNotification && <div><Label htmlFor="app-msg">Message to Applicant</Label><Textarea id="app-msg" placeholder="Enter rejection message..." value={applicantMessage} onChange={(e) => setApplicantMessage(e.target.value)} disabled={loading} rows={3} /></div>}
+              <div><Label htmlFor="reason">Rejection Reason (Required)</Label><Textarea id="reason" placeholder="Why is this application being rejected?" value={reason} onChange={(e) => setReason(e.target.value)} disabled={loading} rows={3} /></div>
 
-          <div><Label htmlFor="int-notes">Internal Notes</Label><Textarea id="int-notes" placeholder="Add notes..." value={internalNotes} onChange={(e) => setInternalNotes(e.target.value)} disabled={loading} rows={2} /></div>
+              <div className="flex items-center gap-2">
+                <input type="checkbox" id="send-notif" checked={sendNotification} onChange={(e) => setSendNotification(e.target.checked)} disabled={loading} className="h-4 w-4 rounded" />
+                <Label htmlFor="send-notif" className="font-normal">Send notification to applicant</Label>
+              </div>
 
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>Cancel</Button>
-            <Button type="submit" variant="secondary" disabled={loading} className="gap-2">{loading && <Loader2 className="h-4 w-4 animate-spin" />}Reject</Button>
-          </div>
-        </form>
+              {sendNotification && <div><Label htmlFor="app-msg">Message to Applicant</Label><Textarea id="app-msg" placeholder="Enter rejection message..." value={applicantMessage} onChange={(e) => setApplicantMessage(e.target.value)} disabled={loading} rows={3} /></div>}
+
+              <div><Label htmlFor="int-notes">Internal Notes</Label><Textarea id="int-notes" placeholder="Add notes..." value={internalNotes} onChange={(e) => setInternalNotes(e.target.value)} disabled={loading} rows={2} /></div>
+
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>Cancel</Button>
+                <Button type="submit" variant="secondary" disabled={loading} className="gap-2">{loading && <Loader2 className="h-4 w-4 animate-spin" />}{loading ? "Rejecting..." : "Reject"}</Button>
+              </div>
+            </form>
+          </>
+        )}
       </Card>
     </ModalOverlay>
   );
@@ -313,6 +478,7 @@ export function RejectDialog({ open, onOpenChange, applicationId, organizationId
 // ============================================================================
 
 export function WaitlistDialog({ open, onOpenChange, applicationId, organizationId, onSuccess, applicantName = "Applicant" }: BaseDialogProps & { applicantName?: string }) {
+  const { addToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reason, setReason] = useState("");
@@ -341,12 +507,38 @@ export function WaitlistDialog({ open, onOpenChange, applicationId, organization
         internalNotes: internalNotes || undefined,
       });
 
-      if (!response.success) { setError(getErrorMessage(response)); return; }
-      onSuccess();
-      onOpenChange(false);
+      if (!response.success) { 
+        const errorMsg = getErrorMessage(response);
+        setError(errorMsg);
+        addToast({
+          type: "error",
+          title: "Waitlist Failed",
+          message: errorMsg,
+        });
+        setLoading(false);
+        return;
+      }
+      
+      addToast({
+        type: "success",
+        title: "Added to Waitlist ✓",
+        message: `${applicantName} has been added to the waitlist`,
+        duration: 4000,
+      });
+      
+      setLoading(false);
+      setTimeout(() => {
+        onOpenChange(false);
+        onSuccess();
+      }, 500);
     } catch (err: any) {
-      setError(getErrorMessage(err));
-    } finally {
+      const errorMsg = getErrorMessage(err);
+      setError(errorMsg);
+      addToast({
+        type: "error",
+        title: "Waitlist Failed",
+        message: errorMsg,
+      });
       setLoading(false);
     }
   };
@@ -401,6 +593,7 @@ export function WaitlistDialog({ open, onOpenChange, applicationId, organization
 // ============================================================================
 
 export function EscalateDialog({ open, onOpenChange, applicationId, organizationId, onSuccess, applicantName = "Applicant" }: BaseDialogProps & { applicantName?: string }) {
+  const { addToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reason, setReason] = useState("");
@@ -418,7 +611,16 @@ export function EscalateDialog({ open, onOpenChange, applicationId, organization
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!reason.trim()) { setError("Please provide a reason for escalation"); return; }
+    if (!reason.trim()) { 
+      const errMsg = "Please provide a reason for escalation";
+      setError(errMsg);
+      addToast({
+        type: "error",
+        title: "Missing Reason",
+        message: errMsg,
+      });
+      return;
+    }
     setLoading(true);
 
     try {
@@ -429,12 +631,38 @@ export function EscalateDialog({ open, onOpenChange, applicationId, organization
         internalNotes: internalNotes || undefined,
       });
 
-      if (!response.success) { setError(getErrorMessage(response)); return; }
-      onSuccess();
-      onOpenChange(false);
+      if (!response.success) { 
+        const errorMsg = getErrorMessage(response);
+        setError(errorMsg);
+        addToast({
+          type: "error",
+          title: "Escalation Failed",
+          message: errorMsg,
+        });
+        setLoading(false);
+        return;
+      }
+      
+      addToast({
+        type: "success",
+        title: "Escalated ✓",
+        message: `${applicantName}'s application has been escalated`,
+        duration: 4000,
+      });
+      
+      setLoading(false);
+      setTimeout(() => {
+        onOpenChange(false);
+        onSuccess();
+      }, 500);
     } catch (err: any) {
-      setError(getErrorMessage(err));
-    } finally {
+      const errorMsg = getErrorMessage(err);
+      setError(errorMsg);
+      addToast({
+        type: "error",
+        title: "Escalation Failed",
+        message: errorMsg,
+      });
       setLoading(false);
     }
   };
@@ -495,6 +723,7 @@ export function EscalateDialog({ open, onOpenChange, applicationId, organization
 // ============================================================================
 
 export function RequestAdditionalInfoDialog({ open, onOpenChange, applicationId, organizationId, onSuccess, applicantName = "Applicant" }: BaseDialogProps & { applicantName?: string }) {
+  const { addToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<string[]>([""]); 
@@ -513,7 +742,16 @@ export function RequestAdditionalInfoDialog({ open, onOpenChange, applicationId,
     e.preventDefault();
     setError(null);
     const filledItems = items.filter((i) => i.trim());
-    if (filledItems.length === 0) { setError("Please add at least one item"); return; }
+    if (filledItems.length === 0) { 
+      const errMsg = "Please add at least one item";
+      setError(errMsg);
+      addToast({
+        type: "error",
+        title: "Missing Items",
+        message: errMsg,
+      });
+      return;
+    }
     setLoading(true);
 
     try {
@@ -526,12 +764,38 @@ export function RequestAdditionalInfoDialog({ open, onOpenChange, applicationId,
         internalNotes: internalNotes || undefined,
       });
 
-      if (!response.success) { setError(getErrorMessage(response)); return; }
-      onSuccess();
-      onOpenChange(false);
+      if (!response.success) { 
+        const errorMsg = getErrorMessage(response);
+        setError(errorMsg);
+        addToast({
+          type: "error",
+          title: "Request Failed",
+          message: errorMsg,
+        });
+        setLoading(false);
+        return;
+      }
+      
+      addToast({
+        type: "success",
+        title: "Request Sent ✓",
+        message: `Additional information requested from ${applicantName}`,
+        duration: 4000,
+      });
+      
+      setLoading(false);
+      setTimeout(() => {
+        onOpenChange(false);
+        onSuccess();
+      }, 500);
     } catch (err: any) {
-      setError(getErrorMessage(err));
-    } finally {
+      const errorMsg = getErrorMessage(err);
+      setError(errorMsg);
+      addToast({
+        type: "error",
+        title: "Request Failed",
+        message: errorMsg,
+      });
       setLoading(false);
     }
   };
@@ -591,6 +855,7 @@ export function RequestAdditionalInfoDialog({ open, onOpenChange, applicationId,
 // ============================================================================
 
 export function WithdrawDialog({ open, onOpenChange, applicationId, organizationId, onSuccess, applicantName = "Applicant" }: BaseDialogProps & { applicantName?: string }) {
+  const { addToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reason, setReason] = useState("");
@@ -607,7 +872,16 @@ export function WithdrawDialog({ open, onOpenChange, applicationId, organization
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!reason.trim()) { setError("Please provide a reason for withdrawal"); return; }
+    if (!reason.trim()) { 
+      const errMsg = "Please provide a reason for withdrawal";
+      setError(errMsg);
+      addToast({
+        type: "error",
+        title: "Missing Reason",
+        message: errMsg,
+      });
+      return;
+    }
     setLoading(true);
 
     try {
@@ -619,12 +893,38 @@ export function WithdrawDialog({ open, onOpenChange, applicationId, organization
         withdrawnByApplicant,
       });
 
-      if (!response.success) { setError(getErrorMessage(response)); return; }
-      onSuccess();
-      onOpenChange(false);
+      if (!response.success) { 
+        const errorMsg = getErrorMessage(response);
+        setError(errorMsg);
+        addToast({
+          type: "error",
+          title: "Withdrawal Failed",
+          message: errorMsg,
+        });
+        setLoading(false);
+        return;
+      }
+      
+      addToast({
+        type: "success",
+        title: "Withdrawn ✓",
+        message: `${applicantName}'s application has been withdrawn`,
+        duration: 4000,
+      });
+      
+      setLoading(false);
+      setTimeout(() => {
+        onOpenChange(false);
+        onSuccess();
+      }, 500);
     } catch (err: any) {
-      setError(getErrorMessage(err));
-    } finally {
+      const errorMsg = getErrorMessage(err);
+      setError(errorMsg);
+      addToast({
+        type: "error",
+        title: "Withdrawal Failed",
+        message: errorMsg,
+      });
       setLoading(false);
     }
   };
@@ -674,6 +974,7 @@ export function WithdrawDialog({ open, onOpenChange, applicationId, organization
 // ============================================================================
 
 export function CloseCaseDialog({ open, onOpenChange, applicationId, organizationId, onSuccess, applicantName = "Applicant" }: BaseDialogProps & { applicantName?: string }) {
+  const { addToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reason, setReason] = useState("");
@@ -688,7 +989,16 @@ export function CloseCaseDialog({ open, onOpenChange, applicationId, organizatio
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!reason.trim()) { setError("Please provide a reason for closure"); return; }
+    if (!reason.trim()) { 
+      const errMsg = "Please provide a reason for closure";
+      setError(errMsg);
+      addToast({
+        type: "error",
+        title: "Missing Reason",
+        message: errMsg,
+      });
+      return;
+    }
     setLoading(true);
 
     try {
@@ -698,12 +1008,38 @@ export function CloseCaseDialog({ open, onOpenChange, applicationId, organizatio
         internalNotes: finalNotes || undefined,
       });
 
-      if (!response.success) { setError(getErrorMessage(response)); return; }
-      onSuccess();
-      onOpenChange(false);
+      if (!response.success) { 
+        const errorMsg = getErrorMessage(response);
+        setError(errorMsg);
+        addToast({
+          type: "error",
+          title: "Close Failed",
+          message: errorMsg,
+        });
+        setLoading(false);
+        return;
+      }
+      
+      addToast({
+        type: "success",
+        title: "Case Closed ✓",
+        message: `${applicantName}'s case has been closed`,
+        duration: 4000,
+      });
+      
+      setLoading(false);
+      setTimeout(() => {
+        onOpenChange(false);
+        onSuccess();
+      }, 500);
     } catch (err: any) {
-      setError(getErrorMessage(err));
-    } finally {
+      const errorMsg = getErrorMessage(err);
+      setError(errorMsg);
+      addToast({
+        type: "error",
+        title: "Close Failed",
+        message: errorMsg,
+      });
       setLoading(false);
     }
   };

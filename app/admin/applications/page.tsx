@@ -182,10 +182,10 @@ export default function AdminApplicationsPage() {
         <>
           <div className="rounded-[28px] border border-border bg-white shadow-soft overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm whitespace-nowrap">
                 <thead>
                   <tr className="border-b border-border bg-slate-50">
-                    <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Applicant</th>
+                    <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 sticky left-0 z-10 bg-slate-50">Applicant</th>
                     <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Program</th>
                     <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Assigned To</th>
                     <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Match Score</th>
@@ -198,7 +198,7 @@ export default function AdminApplicationsPage() {
                 <tbody className="divide-y divide-border">
                   {data.cases.map((caseItem) => (
                     <tr key={caseItem.id} className="transition hover:bg-slate-50">
-                      <td className="px-5 py-4">
+                      <td className="px-5 py-4 sticky left-0 z-10 bg-white hover:bg-slate-50">
                         <div className="flex items-center gap-3">
                           <div className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-xs font-bold text-brand">
                             {caseItem.applicantName?.charAt(0).toUpperCase() || "?"}
@@ -224,7 +224,7 @@ export default function AdminApplicationsPage() {
                         {caseItem.submittedAt ? new Date(caseItem.submittedAt).toLocaleDateString() : "-"}
                       </td>
                       <td className="px-5 py-4">
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusStyles[caseItem.status] || "bg-slate-100 text-slate-700"}`}>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold whitespace-nowrap ${statusStyles[caseItem.status] || "bg-slate-100 text-slate-700"}`}>
                           {statusLabels[caseItem.status] || caseItem.status}
                         </span>
                       </td>
@@ -238,11 +238,11 @@ export default function AdminApplicationsPage() {
                         )}
                       </td>
                       <td className="px-5 py-4">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-shrink-0">
                           <Link href={`/admin/cases/${caseItem.id}`}>
                             <button
                               type="button"
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-border bg-white text-slate-600 transition hover:border-brand hover:text-brand"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-border bg-white text-slate-600 transition hover:border-brand hover:text-brand shrink-0"
                               aria-label={`View ${caseItem.applicantName}`}
                             >
                               <Eye className="h-3.5 w-3.5" />
@@ -251,7 +251,7 @@ export default function AdminApplicationsPage() {
                           <Link href={`/admin/cases/${caseItem.id}?tab=communication`}>
                             <button
                               type="button"
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-border bg-white text-slate-600 transition hover:border-brand hover:text-brand"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-border bg-white text-slate-600 transition hover:border-brand hover:text-brand shrink-0"
                               aria-label={`Message ${caseItem.applicantName}`}
                             >
                               <MessageSquare className="h-3.5 w-3.5" />
