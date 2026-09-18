@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma/client";
 
-const APPROVED_STATUS = "approved";
+const ACTIVE_APPLICATION_STATUSES = ["submitted", "approved"];
 const AVAILABLE_STATUS = "AVAILABLE";
 
 export async function getApprovedApplicantProperties(userId: string) {
@@ -8,7 +8,7 @@ export async function getApprovedApplicantProperties(userId: string) {
   const applications = await prisma.programApplication.findMany({
     where: {
       userId,
-      status: APPROVED_STATUS
+      status: { in: ACTIVE_APPLICATION_STATUSES }
     },
     select: {
       id: true,

@@ -1,10 +1,5 @@
-import CommunicationHubWrapper from '@/components/communications/communication-hub-wrapper';
-import { MessagesPanel } from '@/components/communications/hub-panels';
+import { redirect } from "next/navigation";
 
 export default function MessagesPage() {
-  return (
-    <CommunicationHubWrapper role="applicant">
-      <MessagesPanel />
-    </CommunicationHubWrapper>
-  );
+  redirect("/applicant/messages");
 }

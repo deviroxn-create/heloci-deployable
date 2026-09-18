@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma/client";
 import {
   getOperationOrganizationId,
+  normalizeCommunicationScope,
   resolveCommunicationScope,
   canAccessOrganization,
 } from "@/lib/communications/scope.service";
@@ -234,8 +235,6 @@ async function handleApplicationConversation(
   senderIdentityId?: string,
   attachments?: string[]
 ) {
-  const scope = resolveCommunicationScope(user, organizationId);
-
   // Validate application exists and scope access before sending
   const application = await prisma.programApplication.findUnique({
     where: { id: applicationId },
@@ -254,6 +253,11 @@ async function handleApplicationConversation(
     }, { status: 404 });
   }
 
+  const isApplicant = senderId === application.user.id;
+  const scope = isApplicant
+    ? normalizeCommunicationScope(organizationId, user.id)
+    : resolveCommunicationScope(user, organizationId);
+
   if (!canAccessOrganization(scope, application.program.organizationId)) {
     console.error("[API] ✗ Organization mismatch for application conversation");
     return NextResponse.json({
@@ -263,7 +267,6 @@ async function handleApplicationConversation(
     }, { status: 403 });
   }
 
-  const isApplicant = senderId === application.user.id;
   if (!isApplicant) {
     try {
       await authorizeCommunicationWrite(organizationId, ["org_admin", "case_worker", "reviewer"]);

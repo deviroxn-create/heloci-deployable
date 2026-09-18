@@ -43,7 +43,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     const applicationId = await getApplicationId(request);
     if (!applicationId) return NextResponse.json({ error: "An application is required." }, { status: 400 });
     const interest = await expressApplicantPropertyInterest(applicant.user.id, applicationId, programPropertyId);
-    return NextResponse.json({ interest }, { status: 200 });
+    return NextResponse.json(interest, { status: 200 });
   } catch (error) {
     return handleError(error);
   }
@@ -58,7 +58,10 @@ export async function GET(request: Request, { params }: RouteContext) {
     const applicationId = await getApplicationId(request);
     if (!applicationId) return NextResponse.json({ error: "An application is required." }, { status: 400 });
     const interest = await getApplicantPropertyInterest(applicant.user.id, applicationId, programPropertyId);
-    return NextResponse.json({ interest });
+    return NextResponse.json({
+      interest: interest ? { ...interest, caseConversation: undefined } : null,
+      conversationId: interest?.caseConversation?.id ?? null,
+    });
   } catch (error) {
     return handleError(error);
   }

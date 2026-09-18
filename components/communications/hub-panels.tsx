@@ -314,6 +314,58 @@ export function MessagesPanel({ organizationId }: { organizationId?: string } = 
   );
 }
 
+export function ApplicantMessagesPanel() {
+  const [conversations, setConversations] = useState<any[]>([]);
+  const [selectedApplicationId, setSelectedApplicationId] = useState<string | null>(null);
+  const [conversation, setConversation] = useState<any>(null);
+  const [draft, setDraft] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  async function loadConversation(applicationId: string, organizationId: string) {
+    const response = await fetch(`/api/communications/conversation?applicationId=${encodeURIComponent(applicationId)}&organizationId=${encodeURIComponent(organizationId)}`);
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.message || body.error || 'Unable to load conversation.');
+    setSelectedApplicationId(applicationId);
+    setConversation(body.data);
+  }
+
+  useEffect(() => {
+    void fetch('/api/communications?view=applicant').then(async (response) => {
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || 'Unable to load messages.');
+      const items = Array.isArray(body.data) ? body.data : body.data?.conversations || [];
+      setConversations(items);
+      const requestedId = new URLSearchParams(window.location.search).get('applicationId');
+      const selected = items.find((item: any) => item.applicationId === requestedId) || items[0];
+      if (selected?.conversationId) await loadConversation(selected.applicationId, selected.organizationId);
+    }).catch((reason: Error) => setError(reason.message)).finally(() => setLoading(false));
+  }, []);
+
+  async function sendReply() {
+    const selected = conversations.find((item) => item.applicationId === selectedApplicationId);
+    if (!selected || !draft.trim()) return;
+    const response = await fetch('/api/communications/send-message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ applicationId: selected.applicationId, organizationId: selected.organizationId, content: draft.trim(), messageContext: 'application' }),
+    });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.message || 'Unable to send reply.');
+    setDraft('');
+    await loadConversation(selected.applicationId, selected.organizationId);
+  }
+
+  if (loading) return <Card className="p-8"><Loader2 className="h-5 w-5 animate-spin text-slate-400" /></Card>;
+  if (error) return <Card className="border-red-200 bg-red-50 p-6 text-red-700">{error}</Card>;
+  if (conversations.length === 0) return <Card className="p-8 text-center"><MessageSquare className="mx-auto h-12 w-12 text-slate-300" /><h2 className="mt-4 text-lg font-semibold text-slate-950">Messages</h2><p className="mt-2 text-slate-600">Your HELOCI conversations will appear here.</p></Card>;
+
+  return <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
+    <div className="space-y-2">{conversations.map((item) => <button key={item.applicationId} type="button" onClick={() => void loadConversation(item.applicationId, item.organizationId)} className="w-full rounded-lg border border-slate-200 p-4 text-left hover:bg-slate-50"><p className="font-medium text-slate-950">{item.programName}</p><p className="mt-1 truncate text-sm text-slate-600">{item.lastMessagePreview || 'Conversation'}</p></button>)}</div>
+    {conversation && <Card className="p-5"><h2 className="text-lg font-semibold text-slate-950">{conversation.subject || 'HELOCI support'}</h2><div className="mt-5 space-y-4">{conversation.messages.map((message: any) => <div key={message.id} className="rounded-lg bg-slate-50 p-4"><p className="whitespace-pre-wrap text-sm text-slate-700">{message.content}</p><p className="mt-2 text-xs text-slate-400">{message.sender?.name || 'HELOCI team'}</p></div>)}</div><div className="mt-5 flex gap-2"><input value={draft} onChange={(event) => setDraft(event.target.value)} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Reply to HELOCI" /><button type="button" onClick={() => void sendReply()} className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white">Send</button></div></Card>}
+  </div>;
+}
+
 export function EmailPanel({ organizationId }: { organizationId?: string }) {
   const [showComposer, setShowComposer] = useState(false);
 

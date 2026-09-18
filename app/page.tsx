@@ -1,6 +1,6 @@
 import { ArrowRight, FileText, Home, MessageSquare, Quote, ShieldCheck, Star, Users } from "lucide-react";
 import Link from "next/link";
-import { listPublicProperties } from "@/lib/properties/public-property.service";
+import { prisma } from "@/lib/prisma/client";
 import { HERO_IMAGES, MISSION_IMAGE } from "@/lib/landing-images";
 import { PageShell } from "@/components/shared/page-shell";
 import { HeroCrossfade } from "@/components/marketing/hero-crossfade";
@@ -42,7 +42,11 @@ const faqs = [
 ];
 
 export default async function HomePage() {
-  const properties = await listPublicProperties({ limit: 8 });
+  const properties = await prisma.property.findMany({
+    where: { status: "AVAILABLE" },
+    include: { images: true },
+    take: 8
+  });
 
   return (
     <PageShell>

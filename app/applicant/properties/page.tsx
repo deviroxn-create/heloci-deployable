@@ -46,12 +46,12 @@ export default function ApplicantPropertiesPage() {
   return (
     <ApplicantShell
       title="Available properties"
-      description="Browse properties currently available through your approved housing programs."
+      description="Browse properties currently available through your housing programs."
     >
       {loading ? (
         <div className="flex items-center gap-3 rounded-3xl border border-slate-200 bg-white p-8 text-slate-600 shadow-sm">
           <Loader2 className="h-5 w-5 animate-spin text-brand" />
-          Loading approved-program properties…
+          Loading program properties…
         </div>
       ) : error ? (
         <div className="rounded-3xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">{error}</div>
@@ -60,7 +60,7 @@ export default function ApplicantPropertiesPage() {
           <Home className="mx-auto h-10 w-10 text-slate-300" />
           <h2 className="mt-4 text-xl font-semibold text-slate-950">No properties are available yet</h2>
           <p className="mx-auto mt-2 max-w-lg text-sm leading-7 text-slate-600">
-            Your approved program does not have available properties published right now. Check back as inventory is added.
+            Your program does not have available properties published right now. Check back as inventory is added.
           </p>
           <Button asChild variant="outline" className="mt-6"><Link href="/applicant/applications">View my applications</Link></Button>
         </div>
@@ -78,7 +78,7 @@ export default function ApplicantPropertiesPage() {
               <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
                 {program.properties.map(({ programPropertyId, property }) => (
                   <article key={programPropertyId} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-                    <div className="aspect-[4/3] bg-slate-100">
+                    <div className="relative aspect-[4/3] overflow-hidden bg-slate-100">
                       {property.images[0] ? <ResilientImage src={property.images[0].url} alt={property.images[0].altText || `${property.title} housing`} fill sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw" className="object-cover" /> : <div className="flex h-full items-center justify-center text-slate-300"><Home className="h-10 w-10" /></div>}
                     </div>
                     <div className="p-5">

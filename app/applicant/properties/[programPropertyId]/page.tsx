@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, CheckCircle2, Heart, Home, Loader2, MapPin } from "lucide-react";
 import { ApplicantShell } from "@/components/applicant/applicant-shell";
 import { ResilientImage } from "@/components/marketing/resilient-image";
@@ -37,14 +38,16 @@ export default function ApplicantPropertyDetailPage({ params, searchParams }: { 
   const [property, setProperty] = useState<PropertyDetails | null>(null);
   const [programName, setProgramName] = useState("");
   const [interestStatus, setInterestStatus] = useState<InterestStatus>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [programPropertyId, setProgramPropertyId] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     void Promise.all([params, searchParams]).then(([{ programPropertyId: id }, { applicationId }]) => {
-      if (!applicationId) throw new Error("Unable to determine the approved application for this property.");
+      if (!applicationId) throw new Error("Unable to determine the application for this property.");
       setProgramPropertyId(id);
       return Promise.all([
         fetch("/api/applicant/properties"),
@@ -64,21 +67,32 @@ export default function ApplicantPropertyDetailPage({ params, searchParams }: { 
           }
         }
         setInterestStatus(interest.interest?.status ?? null);
+        setConversationId(interest.conversationId ?? null);
       }).catch((reason: Error) => setError(reason.message)).finally(() => setLoading(false));
     });
   }, [params, searchParams]);
 
-  async function changeInterest() {
+  function openConversation() {
+    const applicationId = new URLSearchParams(window.location.search).get("applicationId");
+    if (applicationId && conversationId) {
+      router.push(`/applicant/messages?applicationId=${encodeURIComponent(applicationId)}`);
+    }
+  }
+
+  async function expressInterest() {
     if (!programPropertyId) return;
     setUpdating(true);
-    const method = interestStatus === "INTERESTED" ? "DELETE" : "POST";
     try {
       const applicationId = new URLSearchParams(window.location.search).get("applicationId");
       if (!applicationId) throw new Error("Unable to determine the approved application for this property.");
-      const response = await fetch(`/api/applicant/properties/${programPropertyId}/interest?applicationId=${encodeURIComponent(applicationId)}`, { method });
+      const response = await fetch(`/api/applicant/properties/${programPropertyId}/interest?applicationId=${encodeURIComponent(applicationId)}`, { method: "POST" });
       const body = response.status === 204 ? null : await response.json();
       if (!response.ok) throw new Error(body?.error || "Unable to update your interest.");
-      setInterestStatus(method === "POST" ? "INTERESTED" : "WITHDRAWN");
+      setInterestStatus("INTERESTED");
+      setConversationId(body?.conversationId ?? null);
+      if (body?.conversationId) {
+        router.push(`/applicant/messages?applicationId=${encodeURIComponent(applicationId)}`);
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to update your interest.");
     } finally {
@@ -99,7 +113,7 @@ export default function ApplicantPropertyDetailPage({ params, searchParams }: { 
           <Link href="/applicant/properties" className="inline-flex items-center gap-2 text-sm font-semibold text-brand hover:text-brandHover"><ArrowLeft className="h-4 w-4" /> Back to available properties</Link>
           <article className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-sm">
             <div className="grid lg:grid-cols-[1.1fr_0.9fr]">
-              <div className="relative aspect-[4/3] bg-slate-100 lg:aspect-auto lg:min-h-[520px]">{property.images[0] ? <ResilientImage src={property.images[0].url} alt={property.images[0].altText || `${property.title} housing`} fill sizes="(max-width: 1024px) 100vw, 60vw" className="object-cover" priority /> : <div className="flex h-full min-h-[320px] items-center justify-center text-slate-300"><Home className="h-14 w-14" /></div>}</div>
+              <div className="relative aspect-[4/3] overflow-hidden bg-slate-100 lg:aspect-auto lg:min-h-[520px]">{property.images[0] ? <ResilientImage src={property.images[0].url} alt={property.images[0].altText || `${property.title} housing`} fill sizes="(max-width: 1024px) 100vw, 60vw" className="object-cover" priority /> : <div className="flex h-full min-h-[320px] items-center justify-center text-slate-300"><Home className="h-14 w-14" /></div>}</div>
               <div className="flex flex-col p-6 sm:p-8 lg:p-10">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand">Available through {programName}</p>
                 <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">{property.title}</h1>
@@ -109,8 +123,7 @@ export default function ApplicantPropertyDetailPage({ params, searchParams }: { 
                 <p className="mt-6 text-2xl font-semibold text-slate-950">${property.rent.toLocaleString()}{property.rentMax ? `–$${property.rentMax.toLocaleString()}` : ""}<span className="text-sm font-normal text-slate-500">/mo</span></p>
                 {property.amenities.length > 0 && <div className="mt-6"><h2 className="text-sm font-semibold text-slate-950">Property features</h2><div className="mt-3 flex flex-wrap gap-2">{property.amenities.map((amenity) => <span key={amenity} className="rounded-full bg-slate-100 px-3 py-1.5 text-xs text-slate-700">{amenity}</span>)}</div></div>}
                 {error && <p className="mt-5 text-sm text-red-700">{error}</p>}
-                <Button type="button" onClick={() => void changeInterest()} disabled={updating} className="mt-8 min-h-12 w-full sm:w-fit">{updating ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Updating...</> : interestStatus === "INTERESTED" ? <><CheckCircle2 className="mr-2 h-4 w-4" /> I’m interested</> : <><Heart className="mr-2 h-4 w-4" /> {interestStatus === "WITHDRAWN" ? "Re-express interest" : "I’m interested"}</>}</Button>
-                {interestStatus === "INTERESTED" && <p className="mt-3 text-sm text-emerald-700">Your interest has been recorded. A member of your support team can follow up with next steps.</p>}
+                {interestStatus === "INTERESTED" ? <div className="mt-8 space-y-3"><p className="flex items-center gap-2 text-sm font-semibold text-emerald-700"><CheckCircle2 className="h-4 w-4" /> Interest recorded</p>{conversationId && <Button type="button" onClick={openConversation} className="min-h-12 w-full sm:w-fit">Open conversation</Button>}</div> : <Button type="button" onClick={() => void expressInterest()} disabled={updating} className="mt-8 min-h-12 w-full sm:w-fit">{updating ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending...</> : <><Heart className="mr-2 h-4 w-4" /> I’m interested</>}</Button>}
               </div>
             </div>
           </article>

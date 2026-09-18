@@ -500,6 +500,7 @@ model ApplicantPropertyInterest {
   updatedAt            DateTime           @updatedAt
   programApplication   ProgramApplication @relation(fields: [programApplicationId], references: [id], onDelete: Cascade)
   programProperty      ProgramProperty    @relation(fields: [programPropertyId], references: [id], onDelete: Cascade)
+  caseConversation     CaseConversation?
 
   @@unique([programApplicationId, programPropertyId], map: "ApplicantPropertyInterest_programApplicationId_programPropertyI")
   @@index([programApplicationId, status])
@@ -631,18 +632,20 @@ model OrganizationCommunicationRecipient {
 }
 
 model CaseConversation {
-  id                 String             @id @default(cuid())
-  applicationId      String             @unique
+  id                 String                     @id @default(cuid())
+  applicationId      String                     @unique
+  propertyInterestId String?                    @unique
   subject            String?
-  lastMessageAt      DateTime           @default(now())
+  lastMessageAt      DateTime                   @default(now())
   lastMessageFrom    String?
-  applicantRead      Boolean            @default(false)
+  applicantRead      Boolean                    @default(false)
   applicantReadAt    DateTime?
-  staffRead          Boolean            @default(false)
+  staffRead          Boolean                    @default(false)
   staffReadAt        DateTime?
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
-  programApplication ProgramApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+  programApplication ProgramApplication         @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  propertyInterest   ApplicantPropertyInterest? @relation(fields: [propertyInterestId], references: [id], onDelete: SetNull)
   messages           CaseMessage[]
 
   @@index([applicationId])

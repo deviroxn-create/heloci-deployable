@@ -1,5 +1,10 @@
-import { redirect } from "next/navigation";
+import { ApplicantShell } from "@/components/applicant/applicant-shell";
+import { ApplicantMessagesPanel } from "@/components/applicant/applicant-messages-panel";
 
 export default function ApplicantMessagesPage() {
-  redirect("/applicant/communication/messages");
+  return (
+    <ApplicantShell title="Messages" description="Stay connected with your HELOCI support team.">
+      <ApplicantMessagesPanel />
+    </ApplicantShell>
+  );
 }

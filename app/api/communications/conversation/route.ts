@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { authorizeCommunicationRead } from "@/lib/auth/communication-authorization";
-import { resolveCommunicationScope } from "@/lib/communications/scope.service";
+import { normalizeCommunicationScope, resolveCommunicationScope } from "@/lib/communications/scope.service";
+import { prisma } from "@/lib/prisma/client";
 import { getConversation } from "@/lib/communications/case-communication.service";
 
 /**
@@ -46,8 +47,21 @@ export async function GET(request: NextRequest) {
     }
 
     console.log("[API] Loading conversation...");
-    await authorizeCommunicationRead(organizationId);
-    const scope = resolveCommunicationScope(user, organizationId);
+    const isApplicant = user.role === "APPLICANT";
+    let scope;
+    if (isApplicant) {
+      const application = await prisma.programApplication.findFirst({
+        where: { id: applicationId, userId: user.id },
+        select: { program: { select: { organizationId: true } } },
+      });
+      if (!application || application.program.organizationId !== organizationId) {
+        throw new Error("UNAUTHORIZED");
+      }
+      scope = normalizeCommunicationScope(organizationId, user.id);
+    } else {
+      await authorizeCommunicationRead(organizationId);
+      scope = resolveCommunicationScope(user, organizationId);
+    }
     const conversation = await getConversation(
       applicationId,
       user.id,

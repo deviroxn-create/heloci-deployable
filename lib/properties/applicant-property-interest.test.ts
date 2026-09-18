@@ -14,7 +14,7 @@ const approvedApplication = {
   id: "application-1",
   userId: "applicant-1",
   status: "approved",
-  program: { id: "program-1", organizationId: "org-1" }
+  program: { id: "program-1", organizationId: "org-1", createdBy: "staff-1" }
 };
 
 const availableProgramProperty = {
@@ -24,7 +24,7 @@ const availableProgramProperty = {
   isActive: true,
   availableFrom: null,
   availableUntil: null,
-  property: { status: "AVAILABLE", units: [{ id: "unit-1" }] }
+  property: { title: "Havens at Hickory Tree", status: "AVAILABLE", units: [{ id: "unit-1" }] }
 };
 
 const interestRecord = {
@@ -47,6 +47,14 @@ function installPersistenceMocks(application: typeof approvedApplication | null 
 
   prisma.programProperty.findUnique = (async () => availableProgramProperty) as unknown as typeof prisma.programProperty.findUnique;
   prisma.programApplication.findFirst = (async () => application) as unknown as typeof prisma.programApplication.findFirst;
+  prisma.programApplication.findUnique = (async () => ({
+    id: "application-1",
+    userId: "applicant-1",
+    program: { id: "program-1", name: "Housing Program", organization: { id: "org-1" }, createdBy: "staff-1" },
+    user: { id: "applicant-1", name: "Applicant", email: "applicant@example.com" },
+    assignedTo: null,
+    assignedToId: null,
+  })) as unknown as typeof prisma.programApplication.findUnique;
   prisma.applicantPropertyInterest.upsert = (async (args: UpsertArgs) => {
     upsertCalls.push(args);
     const key = `${args.where.programApplicationId_programPropertyId.programApplicationId}:${args.where.programApplicationId_programPropertyId.programPropertyId}`;
@@ -55,6 +63,19 @@ function installPersistenceMocks(application: typeof approvedApplication | null 
     interests.set(key, record);
     return record;
   }) as unknown as typeof prisma.applicantPropertyInterest.upsert;
+  prisma.caseConversation.findUnique = (async () => ({ id: "conversation-1", applicationId: "application-1" })) as unknown as typeof prisma.caseConversation.findUnique;
+  prisma.caseConversation.create = (async () => ({ id: "conversation-1", applicationId: "application-1" })) as unknown as typeof prisma.caseConversation.create;
+  prisma.caseConversation.update = (async () => ({ id: "conversation-1", applicationId: "application-1" })) as unknown as typeof prisma.caseConversation.update;
+  prisma.caseMessage.findFirst = (async () => null) as unknown as typeof prisma.caseMessage.findFirst;
+  prisma.caseMessage.create = (async () => ({ id: "message-1", sender: { id: "staff-1", name: "Staff", email: "staff@example.com", role: "ORG_ADMIN" }, attachments: [] })) as unknown as typeof prisma.caseMessage.create;
+  prisma.applicationEvent.create = (async () => ({ id: "event-1" })) as unknown as typeof prisma.applicationEvent.create;
+  prisma.user.findUnique = (async ({ where }: { where: { id: string } }) => ({ id: where.id, name: "Staff", email: "staff@example.com", role: "ORG_ADMIN" })) as unknown as typeof prisma.user.findUnique;
+  prisma.programApplication.update = (async () => ({ id: "application-1" })) as unknown as typeof prisma.programApplication.update;
+  prisma.applicantPropertyInterest.findUnique = (async (args: FindUniqueArgs) => {
+    const key = `${args.where.programApplicationId_programPropertyId.programApplicationId}:${args.where.programApplicationId_programPropertyId.programPropertyId}`;
+    const interest = interests.get(key);
+    return interest ? { ...interest, caseConversation: { id: "conversation-1" } } : null;
+  }) as unknown as typeof prisma.applicantPropertyInterest.findUnique;
   prisma.applicantPropertyInterest.updateMany = (async (args: UpdateManyArgs) => {
     updateManyCalls.push(args);
     const key = `${args.where.programApplicationId}:${args.where.programPropertyId}`;
@@ -75,6 +96,10 @@ test("accepts one approved application for the matching program and organization
   assert.doesNotThrow(() => assertApplicationMatchesProgramProperty("applicant-1", approvedApplication, programProperty));
 });
 
+test("rejects a submitted application for the matching program and organization", () => {
+  assert.throws(() => assertApplicationMatchesProgramProperty("applicant-1", { ...approvedApplication, status: "submitted" }, programProperty), ApplicantPropertyInterestError);
+});
+
 test("rejects an application belonging to another applicant", () => {
   assert.throws(
     () => assertApplicationMatchesProgramProperty("applicant-2", approvedApplication, programProperty),
@@ -91,14 +116,14 @@ test("rejects an application that is not approved", () => {
 
 test("rejects an application for a different program", () => {
   assert.throws(
-    () => assertApplicationMatchesProgramProperty("applicant-1", { ...approvedApplication, program: { id: "program-2", organizationId: "org-1" } }, programProperty),
+    () => assertApplicationMatchesProgramProperty("applicant-1", { ...approvedApplication, program: { id: "program-2", organizationId: "org-1", createdBy: "staff-1" } }, programProperty),
     ApplicantPropertyInterestError
   );
 });
 
 test("rejects an application from a different organization", () => {
   assert.throws(
-    () => assertApplicationMatchesProgramProperty("applicant-1", { ...approvedApplication, program: { id: "program-1", organizationId: "org-2" } }, programProperty),
+    () => assertApplicationMatchesProgramProperty("applicant-1", { ...approvedApplication, program: { id: "program-1", organizationId: "org-2", createdBy: "staff-1" } }, programProperty),
     ApplicantPropertyInterestError
   );
 });
@@ -112,9 +137,10 @@ test("rejects a missing application instead of selecting another approved applic
 
 test("creates one interest for one approved application", async () => {
   const persistence = installPersistenceMocks();
-  const interest = await expressApplicantPropertyInterest("applicant-1", "application-1", "program-property-1");
+  const result = await expressApplicantPropertyInterest("applicant-1", "application-1", "program-property-1");
 
-  assert.equal(interest.status, "INTERESTED");
+  assert.equal(result.interest.status, "INTERESTED");
+  assert.equal(result.conversationId, "conversation-1");
   assert.equal(persistence.upsertCalls.length, 1);
   assert.deepEqual(persistence.upsertCalls[0], {
     where: { programApplicationId_programPropertyId: { programApplicationId: "application-1", programPropertyId: "program-property-1" } },
@@ -124,7 +150,7 @@ test("creates one interest for one approved application", async () => {
 });
 
 test("different approved programs can only operate on their matching property assignment", async () => {
-  const persistence = installPersistenceMocks({ ...approvedApplication, program: { id: "program-2", organizationId: "org-1" } });
+  const persistence = installPersistenceMocks({ ...approvedApplication, program: { id: "program-2", organizationId: "org-1", createdBy: "staff-1" } });
 
   await assert.rejects(
     expressApplicantPropertyInterest("applicant-1", "application-2", "program-property-1"),
@@ -182,6 +208,6 @@ test("GET reads only the selected composite relationship", async () => {
 
   assert.deepEqual(persistence.findUniqueCalls[0], {
     where: { programApplicationId_programPropertyId: { programApplicationId: "application-1", programPropertyId: "program-property-1" } },
-    select: { id: true, status: true, createdAt: true, updatedAt: true }
+    select: { id: true, status: true, createdAt: true, updatedAt: true, caseConversation: { select: { id: true } } }
   });
 });

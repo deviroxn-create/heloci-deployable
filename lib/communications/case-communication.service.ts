@@ -125,6 +125,33 @@ export async function getConversation(
   let conversation = await prisma.caseConversation.findUnique({
     where: { applicationId },
     include: {
+      propertyInterest: {
+        include: {
+          programProperty: {
+            include: {
+              property: {
+                select: {
+                  id: true,
+                  title: true,
+                  description: true,
+                  address: true,
+                  city: true,
+                  state: true,
+                  zip: true,
+                  rent: true,
+                  rentMax: true,
+                  bedrooms: true,
+                  bathrooms: true,
+                  sqft: true,
+                  amenities: true,
+                  images: { select: { id: true, url: true, altText: true } },
+                  units: { where: { available: true }, select: { id: true, beds: true, price: true, available: true } },
+                },
+              },
+            },
+          },
+        },
+      },
       messages: {
         include: {
           sender: { select: { id: true, name: true, email: true, role: true } },
@@ -151,6 +178,33 @@ export async function getConversation(
         lastMessageAt: new Date(),
       },
       include: {
+        propertyInterest: {
+          include: {
+            programProperty: {
+              include: {
+                property: {
+                  select: {
+                    id: true,
+                    title: true,
+                    description: true,
+                    address: true,
+                    city: true,
+                    state: true,
+                    zip: true,
+                    rent: true,
+                    rentMax: true,
+                    bedrooms: true,
+                    bathrooms: true,
+                    sqft: true,
+                    amenities: true,
+                    images: { select: { id: true, url: true, altText: true } },
+                    units: { where: { available: true }, select: { id: true, beds: true, price: true, available: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
         messages: {
           include: {
             sender: { select: { id: true, name: true, email: true, role: true } },
@@ -166,6 +220,39 @@ export async function getConversation(
       applicationId
     });
   }
+
+  const propertyInterest = conversation.propertyInterest ?? await prisma.applicantPropertyInterest.findFirst({
+    where: {
+      programApplicationId: applicationId,
+      status: "INTERESTED",
+    },
+    orderBy: { createdAt: "desc" },
+    include: {
+      programProperty: {
+        include: {
+          property: {
+            select: {
+              id: true,
+              title: true,
+              description: true,
+              address: true,
+              city: true,
+              state: true,
+              zip: true,
+              rent: true,
+              rentMax: true,
+              bedrooms: true,
+              bathrooms: true,
+              sqft: true,
+              amenities: true,
+              images: { select: { id: true, url: true, altText: true } },
+              units: { where: { available: true }, select: { id: true, beds: true, price: true, available: true } },
+            },
+          },
+        },
+      },
+    },
+  });
 
   // Load application events
   const events = await prisma.applicationEvent.findMany({
@@ -287,6 +374,12 @@ export async function getConversation(
     applicantEmail: application.user.email,
     programName: application.program.name,
     organizationName: application.program.organization.name,
+    property: propertyInterest?.programProperty.property
+      ? {
+          ...propertyInterest.programProperty.property,
+          programPropertyId: propertyInterest.programProperty.id,
+        }
+      : null,
     status: application.status,
     assignedTo: application.assignedTo,
 
@@ -524,6 +617,37 @@ export async function sendCaseMessage(
   });
 
   return message;
+}
+
+export async function sendPropertyInterestMessage(
+  applicationId: string,
+  propertyInterestId: string,
+  propertyTitle: string,
+  senderId: string,
+  scope: CommunicationScope
+) {
+  const conversation = await getOrCreateConversation(applicationId, senderId, scope);
+  await prisma.caseConversation.update({
+    where: { id: conversation.id },
+    data: {
+      propertyInterestId,
+      subject: `Property interest: ${propertyTitle}`,
+    },
+  });
+
+  const content = `Thank you for letting us know that you're interested in ${propertyTitle}.\n\nWe've received your request and a member of the HELOCI team will review the property details with your approved program and follow up with you here.\n\nIf you have questions about the property, availability, or next steps, you can reply to this conversation at any time.`;
+  const existingMessage = await prisma.caseMessage.findFirst({
+    where: { conversationId: conversation.id, content },
+    select: { id: true },
+  });
+
+  if (!existingMessage) {
+    await sendCaseMessage(applicationId, senderId, scope, content, {
+      messageType: MessageType.SYSTEM_NOTIFICATION,
+    });
+  }
+
+  return conversation.id;
 }
 
 /**

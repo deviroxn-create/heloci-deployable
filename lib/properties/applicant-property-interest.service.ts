@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma/client";
+import { sendPropertyInterestMessage } from "@/lib/communications/case-communication.service";
+import { normalizeCommunicationScope } from "@/lib/communications/scope.service";
 
-const APPROVED_STATUS = "approved";
+const ACTIVE_APPLICATION_STATUSES = ["approved"];
 const INTERESTED_STATUS = "INTERESTED";
 const WITHDRAWN_STATUS = "WITHDRAWN";
 const AVAILABLE_STATUS = "AVAILABLE";
@@ -15,7 +17,7 @@ type ApplicationSelection = {
   id: string;
   userId: string;
   status: string;
-  program: { id: string; organizationId: string };
+  program: { id: string; organizationId: string; createdBy?: string };
 };
 
 type ProgramPropertySelection = {
@@ -26,6 +28,7 @@ type ProgramPropertySelection = {
   availableFrom: Date | null;
   availableUntil: Date | null;
   property: {
+    title: string;
     status: string;
     units: Array<{ id: string }>;
   };
@@ -39,11 +42,11 @@ export function assertApplicationMatchesProgramProperty(
   if (
     !application ||
     application.userId !== userId ||
-    application.status !== APPROVED_STATUS ||
+    !ACTIVE_APPLICATION_STATUSES.includes(application.status) ||
     application.program.id !== programProperty.programId ||
     application.program.organizationId !== programProperty.organizationId
   ) {
-    throw new ApplicantPropertyInterestError("FORBIDDEN", "An approved application is required.");
+    throw new ApplicantPropertyInterestError("FORBIDDEN", "An active application is required.");
   }
 }
 
@@ -59,6 +62,7 @@ async function getAuthorizedApplication(userId: string, applicationId: string, p
       availableUntil: true,
       property: {
         select: {
+          title: true,
           status: true,
           units: { where: { available: true }, select: { id: true } }
         }
@@ -74,13 +78,13 @@ async function getAuthorizedApplication(userId: string, applicationId: string, p
     where: {
       id: applicationId,
       userId,
-      status: APPROVED_STATUS
+      status: { in: ACTIVE_APPLICATION_STATUSES }
     },
     select: {
       id: true,
       userId: true,
       status: true,
-      program: { select: { id: true, organizationId: true } }
+      program: { select: { id: true, organizationId: true, createdBy: true } }
     }
   });
 
@@ -109,7 +113,17 @@ export async function expressApplicantPropertyInterest(userId: string, applicati
   const { application, programProperty } = await getAuthorizedApplication(userId, applicationId, programPropertyId);
   assertCurrentlyAvailable(programProperty);
 
-  return prisma.applicantPropertyInterest.upsert({
+  const existingInterest = await prisma.applicantPropertyInterest.findUnique({
+    where: {
+      programApplicationId_programPropertyId: {
+        programApplicationId: application.id,
+        programPropertyId
+      }
+    },
+    select: { id: true, status: true, createdAt: true, updatedAt: true, caseConversation: { select: { id: true } } }
+  });
+
+  const interest = await prisma.applicantPropertyInterest.upsert({
     where: {
       programApplicationId_programPropertyId: {
         programApplicationId: application.id,
@@ -123,6 +137,21 @@ export async function expressApplicantPropertyInterest(userId: string, applicati
     },
     update: { status: INTERESTED_STATUS }
   });
+
+  let conversationId = existingInterest?.caseConversation?.id;
+  if (!existingInterest) {
+    if (!application.program.createdBy) throw new Error("PROGRAM_OWNER_NOT_FOUND");
+    const scope = normalizeCommunicationScope(programProperty.organizationId, userId);
+    conversationId = await sendPropertyInterestMessage(
+      application.id,
+      interest.id,
+      programProperty.property.title,
+      application.program.createdBy,
+      scope
+    );
+  }
+
+  return { interest, conversationId };
 }
 
 export async function withdrawApplicantPropertyInterest(userId: string, applicationId: string, programPropertyId: string) {
@@ -146,7 +175,7 @@ export async function getApplicantPropertyInterest(userId: string, applicationId
         programPropertyId
       }
     },
-    select: { id: true, status: true, createdAt: true, updatedAt: true },
+    select: { id: true, status: true, createdAt: true, updatedAt: true, caseConversation: { select: { id: true } } },
   });
 }
 

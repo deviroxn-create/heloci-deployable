@@ -63,7 +63,30 @@ test("approved applicant discovery returns the exact application and program-pro
     program: { id: "program-a", name: "Housing Program", slug: "housing-program", organizationId: "org-a" },
     properties: [{ programPropertyId: "program-property-a", availableFrom: null, availableUntil: null, property: discoveredProperty }]
   }]);
-  assert.deepEqual((query as { where: unknown }).where, { userId: "applicant-a", status: "approved" });
+  assert.deepEqual((query as { where: unknown }).where, { userId: "applicant-a", status: { in: ["submitted", "approved"] } });
+});
+
+test("submitted applicants can discover properties assigned to their program", async () => {
+  prisma.programApplication.findMany = (async () => [{
+    id: "application-submitted",
+    program: {
+      id: "program-a",
+      name: "Housing Program",
+      slug: "housing-program",
+      organizationId: "org-a",
+      programProperties: [{
+        id: "program-property-a",
+        isActive: true,
+        availableFrom: null,
+        availableUntil: null,
+        property: discoveredProperty
+      }]
+    }
+  }]) as unknown as typeof prisma.programApplication.findMany;
+
+  const result = await getApprovedApplicantProperties("applicant-a");
+
+  assert.equal(result[0]?.properties[0]?.property.id, "property-a");
 });
 
 test("discovery query requires active date-valid assignments and available units", async () => {
