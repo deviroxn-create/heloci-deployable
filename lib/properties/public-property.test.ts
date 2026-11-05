@@ -7,6 +7,7 @@ type PublicProperty = {
   id: string;
   organizationId: string | null;
   status: string;
+  listingType?: string | null;
   units: Array<{ id: string; available: boolean }>;
   images: Array<{ id: string; url: string; altText: string | null }>;
 };
@@ -25,15 +26,15 @@ function installPublicMocks(properties: PublicProperty[]) {
   const countCalls: unknown[] = [];
   prisma.property.findMany = (async (args: unknown) => {
     findManyCalls.push(args);
-    return properties.filter((property) => property.organizationId !== null && property.status === "AVAILABLE" && property.units.some((unit) => unit.available));
+    return properties.filter((property) => property.organizationId !== null && property.status === "AVAILABLE" && property.listingType !== "For Sale" && property.units.some((unit) => unit.available));
   }) as unknown as typeof prisma.property.findMany;
   prisma.property.findFirst = (async (args: { where?: { id?: string } }) => {
     findFirstCalls.push(args);
-    return properties.find((property) => property.id === args.where?.id && property.organizationId !== null && property.status === "AVAILABLE" && property.units.some((unit) => unit.available)) ?? null;
+    return properties.find((property) => property.id === args.where?.id && property.organizationId !== null && property.status === "AVAILABLE" && property.listingType !== "For Sale" && property.units.some((unit) => unit.available)) ?? null;
   }) as unknown as typeof prisma.property.findFirst;
   prisma.property.count = (async (args: unknown) => {
     countCalls.push(args);
-    return properties.filter((property) => property.organizationId !== null && property.status === "AVAILABLE" && property.units.some((unit) => unit.available)).length;
+    return properties.filter((property) => property.organizationId !== null && property.status === "AVAILABLE" && property.listingType !== "For Sale" && property.units.some((unit) => unit.available)).length;
   }) as unknown as typeof prisma.property.count;
   return { findFirstCalls, findManyCalls, countCalls };
 }
@@ -44,7 +45,7 @@ test("public listing returns only the service's visible property query with defa
 
   assert.deepEqual(result, [visibleProperty]);
   assert.deepEqual(persistence.findManyCalls[0], {
-    where: { organizationId: { not: null }, status: "AVAILABLE", units: { some: { available: true } } },
+     where: { organizationId: { not: null }, status: "AVAILABLE", OR: [{ listingType: null }, { listingType: { notIn: ["For Sale", "FOR_SALE", "for sale", "FOR SALE", "sale", "SALE"] } }], units: { some: { available: true } } },
     include: { images: true },
     orderBy: { updatedAt: "desc" },
     take: 6,
@@ -58,7 +59,7 @@ test("public listing supports custom limit and offset", async () => {
 
   assert.deepEqual(result, [visibleProperty]);
   assert.deepEqual(persistence.findManyCalls[0], {
-    where: { organizationId: { not: null }, status: "AVAILABLE", units: { some: { available: true } } },
+     where: { organizationId: { not: null }, status: "AVAILABLE", OR: [{ listingType: null }, { listingType: { notIn: ["For Sale", "FOR_SALE", "for sale", "FOR SALE", "sale", "SALE"] } }], units: { some: { available: true } } },
     include: { images: true },
     orderBy: { updatedAt: "desc" },
     take: 12,
@@ -72,8 +73,18 @@ test("public count returns total eligible properties", async () => {
 
   assert.deepEqual(result, 1);
   assert.deepEqual(persistence.countCalls[0], {
-    where: { organizationId: { not: null }, status: "AVAILABLE", units: { some: { available: true } } }
+     where: { organizationId: { not: null }, status: "AVAILABLE", OR: [{ listingType: null }, { listingType: { notIn: ["For Sale", "FOR_SALE", "for sale", "FOR SALE", "sale", "SALE"] } }], units: { some: { available: true } } }
   });
+});
+
+test("public rental listings and counts exclude sale listings even if otherwise available", async () => {
+  const saleProperty = { ...visibleProperty, id: "sale-property", listingType: "For Sale" };
+  const persistence = installPublicMocks([visibleProperty, saleProperty]);
+
+  assert.deepEqual(await listPublicProperties(), [visibleProperty]);
+  assert.equal(await countPublicProperties(), 1);
+    assert.deepEqual(await getPublicPropertyById("sale-property"), null);
+    assert.equal(persistence.findFirstCalls.length, 1);
 });
 
 test("public detail lookup rejects arbitrary and non-public properties", async () => {
@@ -85,6 +96,7 @@ test("public detail lookup rejects arbitrary and non-public properties", async (
       id: "unknown-property",
       organizationId: { not: null },
       status: "AVAILABLE",
+        OR: [{ listingType: null }, { listingType: { notIn: ["For Sale", "FOR_SALE", "for sale", "FOR SALE", "sale", "SALE"] } }],
       units: { some: { available: true } }
     },
     include: { images: true }
@@ -93,6 +105,7 @@ test("public detail lookup rejects arbitrary and non-public properties", async (
   for (const property of [
     { ...visibleProperty, id: "no-units", units: [] },
     { ...visibleProperty, id: "unavailable", status: "UNAVAILABLE" },
+    { ...visibleProperty, id: "sale-listing", listingType: "For Sale" },
     { ...visibleProperty, id: "unowned", organizationId: null }
   ]) {
     installPublicMocks([property]);

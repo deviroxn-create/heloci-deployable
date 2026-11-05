@@ -1,8 +1,13 @@
 import { prisma } from "@/lib/prisma/client";
 
+export const rentalListingTypeWhere = {
+  OR: [{ listingType: null }, { listingType: { notIn: ["For Sale", "FOR_SALE", "for sale", "FOR SALE", "sale", "SALE"] } }]
+} as const;
+
 const publicPropertyWhere = {
   organizationId: { not: null },
   status: "AVAILABLE",
+  ...rentalListingTypeWhere,
   units: { some: { available: true } }
 } as const;
 

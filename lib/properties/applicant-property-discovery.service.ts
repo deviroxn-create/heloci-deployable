@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma/client";
+import { rentalListingTypeWhere } from "./public-property.service";
 
 const ACTIVE_APPLICATION_STATUSES = ["submitted", "approved"];
 const AVAILABLE_STATUS = "AVAILABLE";
@@ -24,6 +25,7 @@ export async function getApprovedApplicantProperties(userId: string) {
               OR: [{ availableFrom: null }, { availableFrom: { lte: now } }],
               AND: [{ OR: [{ availableUntil: null }, { availableUntil: { gte: now } }] }],
               property: {
+                ...rentalListingTypeWhere,
                 status: AVAILABLE_STATUS,
                 units: { some: { available: true } }
               }

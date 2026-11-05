@@ -1,6 +1,7 @@
 import { ArrowRight, FileText, Home, MessageSquare, Quote, ShieldCheck, Star, Users } from "lucide-react";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma/client";
+import { rentalListingTypeWhere } from "@/lib/properties/public-property.service";
 import { HERO_IMAGES, MISSION_IMAGE } from "@/lib/landing-images";
 import { PageShell } from "@/components/shared/page-shell";
 import { HeroCrossfade } from "@/components/marketing/hero-crossfade";
@@ -43,7 +44,7 @@ const faqs = [
 
 export default async function HomePage() {
   const properties = await prisma.property.findMany({
-    where: { status: "AVAILABLE" },
+    where: { status: "AVAILABLE", ...rentalListingTypeWhere },
     include: { images: true },
     take: 8
   });

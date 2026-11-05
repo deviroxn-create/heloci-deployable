@@ -31,7 +31,11 @@ type AvailabilityWhere = {
   isActive: boolean;
   OR: Array<{ availableFrom: null | { lte: Date } }>;
   AND: Array<{ OR: Array<{ availableUntil: null | { gte: Date } }> }>;
-  property: { status: string; units: { some: { available: boolean } } };
+  property: {
+    OR: Array<{ listingType: null | { not: string } }>;
+    status: string;
+    units: { some: { available: boolean } };
+  };
 };
 
 test("approved applicant discovery returns the exact application and program-property context", async () => {
@@ -89,7 +93,7 @@ test("submitted applicants can discover properties assigned to their program", a
   assert.equal(result[0]?.properties[0]?.property.id, "property-a");
 });
 
-test("discovery query requires active date-valid assignments and available units", async () => {
+test("rental discovery requires active date-valid assignments, available units, and a non-sale listing", async () => {
   let query: unknown;
   prisma.programApplication.findMany = (async (args: { select?: unknown }) => {
     query = args;
@@ -103,5 +107,9 @@ test("discovery query requires active date-valid assignments and available units
   assert.ok(where.OR[1].availableFrom && "lte" in where.OR[1].availableFrom);
   assert.equal(where.AND[0].OR[0].availableUntil, null);
   assert.ok(where.AND[0].OR[1].availableUntil && "gte" in where.AND[0].OR[1].availableUntil);
-  assert.deepEqual(where.property, { status: "AVAILABLE", units: { some: { available: true } } });
+  assert.deepEqual(where.property, {
+      OR: [{ listingType: null }, { listingType: { notIn: ["For Sale", "FOR_SALE", "for sale", "FOR SALE", "sale", "SALE"] } }],
+    status: "AVAILABLE",
+    units: { some: { available: true } }
+  });
 });

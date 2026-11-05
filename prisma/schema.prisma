@@ -69,6 +69,12 @@ model User {
 model Property {
   id                String            @id @default(cuid())
   externalId        String?           @unique
+  listingType       String?
+  salePrice         Int?
+  sourceName        String?
+  sourceUrl         String?
+  sourceStatus      String?
+  sourceMetadata    Json?
   title             String
   description       String
   address           String

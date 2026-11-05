@@ -2,28 +2,15 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-
-interface ImportResult {
-  summary: {
-    created: number;
-    updated: number;
-    failed: number;
-    warnings: number;
-    errors: number;
-  };
-  details: Array<{
-    externalId: string;
-    status: 'created' | 'updated' | 'failed';
-    message?: string;
-  }>;
-}
+import type { PropertyImportResponse } from '@/lib/properties/property-import.service';
+import { PropertyImportResults } from '@/components/property/property-import-results';
 
 export default function PropertyImportPage() {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<ImportResult | null>(null);
+  const [result, setResult] = useState<PropertyImportResponse | null>(null);
   const [dryRun, setDryRun] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -65,7 +52,7 @@ export default function PropertyImportPage() {
         throw new Error(errorData.error || 'Upload failed');
       }
 
-      const data: ImportResult = await response.json();
+      const data: PropertyImportResponse = await response.json();
       setResult(data);
       if (!dryRun) {
         setFile(null);
@@ -149,62 +136,7 @@ export default function PropertyImportPage() {
           {/* Results */}
           {result && (
             <div className="mt-8 space-y-6">
-              <div className="border-t pt-8">
-                <h2 className="text-xl font-bold text-slate-900 mb-4">Import Summary</h2>
-                <div className="grid grid-cols-5 gap-4">
-                  <div className="bg-green-50 p-4 rounded-lg">
-                    <p className="text-sm text-slate-600">Created</p>
-                    <p className="text-2xl font-bold text-green-600">
-                      {result.summary.created}
-                    </p>
-                  </div>
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <p className="text-sm text-slate-600">Updated</p>
-                    <p className="text-2xl font-bold text-blue-600">
-                      {result.summary.updated}
-                    </p>
-                  </div>
-                  <div className="bg-red-50 p-4 rounded-lg">
-                    <p className="text-sm text-slate-600">Failed</p>
-                    <p className="text-2xl font-bold text-red-600">
-                      {result.summary.failed}
-                    </p>
-                  </div>
-                  <div className="bg-yellow-50 p-4 rounded-lg">
-                    <p className="text-sm text-slate-600">Warnings</p>
-                    <p className="text-2xl font-bold text-yellow-600">
-                      {result.summary.warnings}
-                    </p>
-                  </div>
-                  <div className="bg-orange-50 p-4 rounded-lg">
-                    <p className="text-sm text-slate-600">Errors</p>
-                    <p className="text-2xl font-bold text-orange-600">
-                      {result.summary.errors}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Failures */}
-                {result.details.filter(d => d.status === 'failed').length > 0 && (
-                  <div className="mt-6">
-                    <h3 className="font-semibold text-slate-900 mb-3">Failed Records:</h3>
-                    <div className="space-y-2 max-h-48 overflow-y-auto">
-                      {result.details
-                        .filter(d => d.status === 'failed')
-                        .map(detail => (
-                          <div key={detail.externalId} className="bg-red-50 p-3 rounded border border-red-200">
-                            <p className="text-sm font-medium text-slate-900">
-                              {detail.externalId}
-                            </p>
-                            {detail.message && (
-                              <p className="text-xs text-red-600">{detail.message}</p>
-                            )}
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+              <PropertyImportResults response={result} />
 
               {!dryRun && (
                 <button
