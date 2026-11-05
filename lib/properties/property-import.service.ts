@@ -772,7 +772,7 @@ export async function importProperties(body: unknown, options: PropertyImportOpt
         const conflict = racedProperty ?? await findPropertyByExternalId(externalId).catch(() => null);
         if (conflict && conflict.organizationId !== options.organizationId) {
           summary.failed++;
-          results.push({ externalId, title: parsed.data.title, status: "FAILED", warnings: [], errors: ["Property belongs to another organization"] });
+          results.push({ externalId, title: parsed.success ? parsed.data.title : undefined, status: "FAILED", warnings: [], errors: ["Property belongs to another organization"] });
           continue;
         }
         if (racedProperty && item.zillowListing && isZillowProperty(racedProperty)) {

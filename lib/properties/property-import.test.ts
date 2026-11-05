@@ -57,6 +57,7 @@ function installExistingZillowProperty(options: {
       sourceListing: options.listing,
       importReview: { required: false, reasons: [] },
       importedImageUrls: options.managedImageUrls ?? [],
+      legacyUnitOwnershipUnverified: false,
       ...(options.managedUnitIds ? { importedUnitIds: options.managedUnitIds } : {})
     },
     title: typeof options.listing.property_name === "string" ? options.listing.property_name : `Zillow listing ${options.listing.property_id}`,
@@ -483,7 +484,7 @@ test("rent-to-sale transition preserves ambiguous legacy units and reports a war
     assert.equal(result.summary.updated, 1);
     assert.equal(fixture.property.units[0].available, true);
     assert.equal(result.results[0].warnings.some((warning) => warning.includes("could not be confidently attributed")), true);
-    assert.equal((fixture.property.sourceMetadata as { legacyUnitOwnershipUnverified: boolean }).legacyUnitOwnershipUnverified, true);
+    assert.equal(fixture.property.sourceMetadata.legacyUnitOwnershipUnverified, true);
   } finally {
     fixture.restore();
   }

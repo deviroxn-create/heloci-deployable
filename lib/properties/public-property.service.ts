@@ -1,8 +1,9 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma/client";
 
-export const rentalListingTypeWhere = {
+export const rentalListingTypeWhere: Prisma.PropertyWhereInput = {
   OR: [{ listingType: null }, { listingType: { notIn: ["For Sale", "FOR_SALE", "for sale", "FOR SALE", "sale", "SALE"] } }]
-} as const;
+};
 
 const publicPropertyWhere = {
   organizationId: { not: null },
@@ -11,9 +12,9 @@ const publicPropertyWhere = {
   units: { some: { available: true } }
 } as const;
 
-const publicPropertyInclude = {
+const publicPropertyInclude = Prisma.validator<Prisma.PropertyInclude>()({
   images: true
-} as const;
+});
 
 export interface ListPublicPropertiesOptions {
   limit?: number;
