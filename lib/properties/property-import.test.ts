@@ -39,6 +39,8 @@ function installExistingZillowProperty(options: {
   managedUnitIds?: Record<string, string>;
   images?: Array<{ id: string; url: string; altText: string | null }>;
   units?: Array<{ id: string; beds: number; price: number; available: boolean }>;
+  publicationStatus?: string;
+  publicationStatusSource?: string;
 }) {
   const originalFindFirst = prisma.property.findFirst;
   const originalFindUnique = prisma.property.findUnique;
@@ -76,7 +78,11 @@ function installExistingZillowProperty(options: {
     amenities: ["HELOCI managed amenity"],
     specialOffers: ["Internal offer"],
     availabilityCount: isRentalListing && Array.isArray(options.listing.units) ? options.listing.units.filter((unit) => typeof unit === "object" && unit !== null && "isAvailable" in unit && unit.isAvailable === true).length : 0,
-    status: isRentalListing && Array.isArray(options.listing.units) && options.listing.units.some((unit) => typeof unit === "object" && unit !== null && "isAvailable" in unit && unit.isAvailable === true) ? "AVAILABLE" : "UNAVAILABLE",
+    status: isRentalListing
+      ? Array.isArray(options.listing.units) && options.listing.units.some((unit) => typeof unit === "object" && unit !== null && "isAvailable" in unit && unit.isAvailable === true) ? "AVAILABLE" : "UNAVAILABLE"
+      : options.listing.status_text === "Active" ? "AVAILABLE" : "UNAVAILABLE",
+    publicationStatus: options.publicationStatus ?? "PUBLISHED",
+    publicationStatusSource: options.publicationStatusSource ?? "AUTOMATIC",
     images: options.images ?? [],
     units: options.units ?? [],
     programProperties: [{ id: "program-assignment-1" }],
@@ -172,6 +178,8 @@ test("duplicate external IDs import only the first row", async () => {
   assert.equal(result.results[0].status, "CREATED");
   assert.equal(result.results[1].status, "SKIPPED");
   assert.equal(result.results[1].errors[0], "Duplicate externalId in this import");
+  assert.equal(result.results[0].review?.decision, "PENDING_REVIEW");
+  assert.ok(result.results[0].review?.reasons.includes("duplicate_external_id_in_import"));
 });
 
 const losAngelesSale = {
@@ -215,7 +223,7 @@ test("normalizes and stores the Los Angeles Zillow sale without treating its pri
   assert.equal(normalized.listingType, "For Sale");
   assert.equal(normalized.salePrice, 725000);
   assert.equal(normalized.rent, 0);
-  assert.equal(normalized.status, "UNAVAILABLE");
+  assert.equal(normalized.status, "AVAILABLE");
   assert.equal(normalized.sourceName, "Zillow");
   assert.equal(normalized.sourceUrl, losAngelesSale.property_url);
   assert.equal(normalized.images.length, 3);
@@ -256,12 +264,44 @@ test("normalizes and stores the Los Angeles Zillow sale without treating its pri
   assert.equal(createdProperty?.data.salePrice, 725000);
   assert.equal(createdProperty?.data.rent, 0);
   assert.equal(createdProperty?.data.listingType, "For Sale");
-  assert.equal(createdProperty?.data.status, "UNAVAILABLE");
+  assert.equal(createdProperty?.data.status, "AVAILABLE");
+  assert.equal(createdProperty?.data.publicationStatus, "PUBLISHED");
   assert.equal(createdProperty?.data.sourceStatus, "FOR_SALE | Active");
   assert.deepEqual((createdProperty?.data.sourceMetadata as { sourceListing: unknown }).sourceListing, losAngelesSale);
   assert.equal(createdProperty?.data.organizationId, "org-la");
   assert.equal(createdProperty?.data.sourceUrl, losAngelesSale.property_url);
   assert.equal(createdImages.length, 3);
+});
+
+test("missing rental and sale prices enter manual review rather than failing the import", async () => {
+  const rental = {
+    ...losAngelesSale,
+    property_id: "missing-rental-price",
+    listing_type: "For Rent",
+    price: undefined,
+    status: "FOR_RENT",
+    units: [{ bedrooms: 2, rent: 2400, isAvailable: true }]
+  };
+  const sale = { ...losAngelesSale, property_id: "missing-sale-price", price: undefined };
+
+  const rentalResult = await importProperties([rental], { organizationId: "org-a", dryRun: true });
+  const saleResult = await importProperties([sale], { organizationId: "org-a", dryRun: true });
+
+  assert.equal(rentalResult.summary.failed, 0);
+  assert.equal(rentalResult.results[0].review?.decision, "PENDING_REVIEW");
+  assert.ok(rentalResult.results[0].review?.reasons.includes("rental_price_missing_or_invalid"));
+  assert.equal(saleResult.summary.failed, 0);
+  assert.equal(saleResult.results[0].review?.decision, "PENDING_REVIEW");
+  assert.ok(saleResult.results[0].review?.reasons.includes("sale_price_missing_or_invalid"));
+
+  const missingAddress = await importProperties([{
+    ...losAngelesSale,
+    property_id: "missing-address",
+    address: ""
+  }], { organizationId: "org-a", dryRun: true });
+  assert.equal(missingAddress.summary.failed, 0);
+  assert.equal(missingAddress.results[0].review?.decision, "PENDING_REVIEW");
+  assert.ok(missingAddress.results[0].review?.reasons.includes("address_incomplete"));
 });
 
 test("updates an existing same-organization Zillow property and reports its ID and changes", async () => {
@@ -277,6 +317,7 @@ test("updates an existing same-organization Zillow property and reports its ID a
     assert.ok(result.results[0].changes?.includes("price"));
     assert.ok(result.results[0].changes?.includes("title"));
     assert.equal(fixture.property.salePrice, 799000);
+    assert.equal(fixture.property.status, "AVAILABLE");
     assert.equal(fixture.property.title, "Updated Craftsman");
     assert.equal((fixture.property.sourceMetadata as { sourceListing: Record<string, unknown> }).sourceListing.property_type, "Condo");
     assert.equal((fixture.property.sourceMetadata as { sourceListing: Record<string, unknown> }).sourceListing.home_type, "APARTMENT");
@@ -399,6 +440,29 @@ test("refreshes Zillow images, preserves manual images, and remains duplicate-fr
   }
 });
 
+test("repeat imports preserve staff rejection and unpublished decisions", async () => {
+  for (const publicationStatus of ["REJECTED", "APPROVED_UNPUBLISHED"]) {
+    const fixture = installExistingZillowProperty({
+      listing: losAngelesSale,
+      publicationStatus,
+      publicationStatusSource: "STAFF"
+    });
+
+    try {
+      const result = await importProperties([{
+        ...losAngelesSale,
+        property_name: `${publicationStatus} remains`
+      }], { organizationId: "org-a" });
+
+      assert.equal(result.results[0].review?.decision, publicationStatus);
+      assert.equal(fixture.property.publicationStatus, publicationStatus);
+      assert.equal(fixture.property.publicationStatusSource, "STAFF");
+    } finally {
+      fixture.restore();
+    }
+  }
+});
+
 test("sale-to-rent transition creates managed units and recalculates availability", async () => {
   const fixture = installExistingZillowProperty({ listing: losAngelesSale });
   const rental = {
@@ -438,7 +502,7 @@ test("sale-to-rent transition without valid units remains unavailable", async ()
   }
 });
 
-test("rent-to-sale transition disables Zillow-managed units and makes the listing unavailable", async () => {
+test("rent-to-sale transition disables managed units and uses explicit sale availability", async () => {
   const rental = {
     ...losAngelesSale,
     listing_type: "For Rent",
@@ -458,7 +522,7 @@ test("rent-to-sale transition disables Zillow-managed units and makes the listin
     assert.equal(fixture.property.listingType, "For Sale");
     assert.equal(fixture.property.rent, 0);
     assert.equal(fixture.property.salePrice, 725000);
-    assert.equal(fixture.property.status, "UNAVAILABLE");
+    assert.equal(fixture.property.status, "AVAILABLE");
     assert.equal(fixture.property.availabilityCount, 0);
     assert.equal(fixture.property.units[0].available, false);
   } finally {
@@ -689,7 +753,7 @@ test("real import persists represented units and deduplicated images without rep
   assert.equal(imageCreates.length, 1);
 });
 
-test("bulk Zillow import creates rental listings once, skips repeated IDs, and keeps sale price separate", async () => {
+test("bulk Zillow import reviews duplicates, publishes clean rentals, and keeps sale price separate", async () => {
   mockPropertyLookup(null);
   const propertyCreates: Array<{ data: Record<string, unknown> }> = [];
   const unitCreates: Array<{ data: Record<string, unknown> }> = [];
@@ -728,7 +792,8 @@ test("bulk Zillow import creates rental listings once, skips repeated IDs, and k
     listing_type: "FOR_RENT",
     price: 3200,
     status: "FOR_RENT",
-    status_text: "Active"
+    status_text: "Active",
+    units: [{ externalId: "la-rent-unit-1", bedrooms: 3, bathrooms: 2, rent: 3200, sqft: 1480, isAvailable: true }]
   };
   const secondRental = { ...rental, property_id: "la-zillow-rent-2002", property_name: "Second Los Angeles Rental" };
   const result = await importProperties([rental, secondRental, rental], { organizationId: "org-a" });
@@ -739,9 +804,14 @@ test("bulk Zillow import creates rental listings once, skips repeated IDs, and k
   assert.equal(propertyCreates[0].data.salePrice, null);
   assert.equal(propertyCreates[0].data.organizationId, "org-a");
   assert.equal(propertyCreates[0].data.sourceName, "Zillow");
-  assert.equal(unitCreates.length, 0);
-  assert.equal(propertyCreates[0].data.availabilityCount, 0);
-  assert.equal(propertyCreates[0].data.status, "UNAVAILABLE");
-  assert.ok((propertyCreates[0].data.sourceMetadata as { importReview: { required: boolean } }).importReview.required);
+  assert.equal(unitCreates.length, 2);
+  assert.equal(propertyCreates[0].data.availabilityCount, 1);
+  assert.equal(propertyCreates[0].data.status, "AVAILABLE");
+  assert.equal(propertyCreates[0].data.publicationStatus, "PENDING_REVIEW");
+  assert.equal(result.results[0].review?.decision, "PENDING_REVIEW");
+  assert.ok(result.results[0].review?.reasons.includes("duplicate_external_id_in_import"));
+  assert.equal(propertyCreates[1].data.publicationStatus, "PUBLISHED");
+  assert.equal(result.results[1].review?.decision, "PUBLISHED");
+  assert.equal((propertyCreates[0].data.sourceMetadata as { importReview: { required: boolean } }).importReview.required, true);
   assert.equal(imageCreates.length, 6);
 });

@@ -11,8 +11,11 @@ import { supabase } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
-  { label: "Find Housing", href: "/properties" },
-  { label: "Eligibility Checker", href: "/eligibility" }
+  { label: "Home", href: "/" },
+  { label: "Rent", href: "/properties/rent" },
+  { label: "Buy", href: "/properties/buy" },
+  { label: "About HELOCI", href: "/about" },
+  { label: "How It Works", href: "/#how-it-works-heading" }
 ];
 
 const programs = [
@@ -34,6 +37,7 @@ const programs = [
 ];
 
 const resources = [
+  { label: "Check eligibility", href: "/eligibility" },
   { label: "FAQ", href: "/contact#faq" },
   { label: "Guides", href: "/about#guides" },
   { label: "Documents", href: "/eligibility#documents" }
@@ -104,13 +108,13 @@ export function SiteHeader() {
             Heloci
           </Link>
 
-          <nav className="hidden items-center gap-1 whitespace-nowrap text-sm font-medium text-slate-700 lg:flex">
+          <nav aria-label="Main navigation" className="hidden items-center gap-0 whitespace-nowrap text-xs font-medium text-slate-700 xl:flex">
             {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`rounded-full px-4 py-2 transition hover:bg-slate-100 hover:text-brand ${
-                  pathname === item.href ? "text-brand" : "text-slate-700"
+                className={`rounded-full px-2.5 py-2 transition hover:bg-slate-100 hover:text-brand ${
+                  pathname === item.href || (item.href !== "/" && !item.href.includes("#") && pathname.startsWith(item.href)) ? "text-brand" : "text-slate-700"
                 }`}
               >
                 {item.label}
@@ -161,11 +165,11 @@ export function SiteHeader() {
                 ))}
               </div>
             </div>
-          </nav>
+        </nav>
         </div>
 
         {/* ── Right: auth-aware actions (desktop) ── */}
-        <div className="hidden items-center gap-3 lg:flex">
+        <div className="hidden items-center gap-3 xl:flex">
           {authLoading ? (
             // Skeleton placeholder while session loads
             <div className="h-9 w-40 animate-pulse rounded-full bg-slate-100" />
@@ -227,7 +231,7 @@ export function SiteHeader() {
         {/* ── Mobile hamburger ── */}
         <button
           type="button"
-          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border bg-white text-slate-700 transition hover:bg-slate-100 lg:hidden"
+          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border bg-white text-slate-700 transition hover:bg-slate-100 xl:hidden"
           onClick={() => setDrawerOpen(true)}
           aria-label="Open menu"
         >
@@ -239,12 +243,11 @@ export function SiteHeader() {
       <AnimatePresence>
         {drawerOpen ? (
           <motion.div
-            className="fixed inset-0 z-[60] bg-slate-950/30 backdrop-blur-sm lg:hidden"
+            className="fixed inset-0 z-[60] bg-slate-950/30 backdrop-blur-sm xl:hidden"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setDrawerOpen(false)}
-            aria-hidden="true"
           >
             <motion.div
               className="fixed right-0 top-0 z-[70] h-full w-[min(320px,calc(100vw-1rem))] max-w-full overflow-y-auto bg-white px-6 py-6 shadow-soft"
@@ -280,16 +283,23 @@ export function SiteHeader() {
 
               {/* Nav links */}
               <div className="space-y-2">
+              <nav aria-label="Mobile navigation" className="space-y-2">
                 {navItems.map((item) => (
                   <Link
                     key={item.href}
                     href={item.href}
-                    className="block rounded-2xl border border-border bg-slate-50 px-4 py-3.5 text-sm font-medium text-slate-900 transition hover:bg-slate-100"
+                    aria-current={pathname === item.href || (item.href !== "/" && !item.href.includes("#") && pathname.startsWith(item.href)) ? "page" : undefined}
+                    className={`block rounded-2xl border border-border px-4 py-3.5 text-sm font-medium transition hover:bg-slate-100 ${
+                      pathname === item.href || (item.href !== "/" && !item.href.includes("#") && pathname.startsWith(item.href))
+                        ? "bg-brand/5 text-brand"
+                        : "bg-slate-50 text-slate-900"
+                    }`}
                     onClick={() => setDrawerOpen(false)}
                   >
                     {item.label}
                   </Link>
                 ))}
+              </nav>
 
                 <div className="rounded-2xl border border-border bg-slate-50 p-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Programs</p>

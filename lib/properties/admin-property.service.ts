@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma/client";
 import { documentStorageService } from "@/lib/documents/storage.service";
+import {
+  PROPERTY_PUBLICATION_STATUSES
+} from "./property-review.service";
 
 const propertyFields = {
   id: true,
@@ -14,6 +17,8 @@ const propertyFields = {
   longitude: true,
   rent: true,
   rentMax: true,
+  listingType: true,
+  salePrice: true,
   bedrooms: true,
   bathrooms: true,
   sqft: true,
@@ -22,6 +27,8 @@ const propertyFields = {
   contactPhone: true,
   availabilityCount: true,
   status: true,
+  publicationStatus: true,
+  publicationStatusSource: true,
   organizationId: true,
   createdAt: true,
   updatedAt: true,
@@ -41,6 +48,8 @@ export interface PropertyInput {
   longitude?: number | null;
   rent: number;
   rentMax?: number | null;
+  listingType?: string | null;
+  salePrice?: number | null;
   bedrooms: number;
   bathrooms: number;
   sqft: number;
@@ -49,6 +58,7 @@ export interface PropertyInput {
   contactPhone?: string | null;
   availabilityCount?: number;
   status?: string;
+  publicationStatus?: string;
 }
 
 export interface PropertyUnitInput {
@@ -80,6 +90,15 @@ function validatePropertyInput(input: Partial<PropertyInput>) {
   if (input.rentMax !== undefined && input.rentMax !== null && (typeof input.rentMax !== "number" || input.rentMax < 0)) {
     throw new Error("rentMax must be a non-negative number");
   }
+  if (input.salePrice !== undefined && input.salePrice !== null && (!Number.isSafeInteger(input.salePrice) || input.salePrice <= 0)) {
+    throw new Error("salePrice must be a positive safe integer");
+  }
+  if (
+    input.publicationStatus !== undefined
+    && !PROPERTY_PUBLICATION_STATUSES.some((status) => status === input.publicationStatus)
+  ) {
+    throw new Error("publicationStatus is invalid");
+  }
 
   if (input.availabilityCount !== undefined && (!Number.isInteger(input.availabilityCount) || input.availabilityCount < 0)) {
     throw new Error("availabilityCount must be a non-negative integer");
@@ -106,6 +125,8 @@ function toPropertyData(input: PropertyInput) {
     longitude: input.longitude ?? null,
     rent: input.rent,
     rentMax: input.rentMax ?? null,
+    listingType: input.listingType ?? null,
+    salePrice: input.salePrice ?? null,
     bedrooms: input.bedrooms,
     bathrooms: input.bathrooms,
     sqft: input.sqft,
@@ -113,7 +134,9 @@ function toPropertyData(input: PropertyInput) {
     specialOffers: input.specialOffers ?? [],
     contactPhone: input.contactPhone ?? null,
     availabilityCount: input.availabilityCount ?? 0,
-    status: input.status ?? "UNAVAILABLE"
+    status: input.status ?? "UNAVAILABLE",
+    publicationStatus: input.publicationStatus ?? "PENDING_REVIEW",
+    publicationStatusSource: input.publicationStatus ? "STAFF" : "AUTOMATIC"
   };
 }
 
@@ -144,9 +167,13 @@ export async function updatePropertyForOrganization(organizationId: string, prop
   if (!existing) throw new Error("PROPERTY_NOT_FOUND");
 
   validatePropertyInput({ ...existing, ...input });
+  const data = {
+    ...input,
+    ...(input.publicationStatus === undefined ? {} : { publicationStatusSource: "STAFF" })
+  };
   return prisma.property.update({
     where: { id: propertyId },
-    data: input,
+    data,
     select: propertyFields
   });
 }

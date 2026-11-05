@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma/client";
 import {
   addPropertyImage,
   addPropertyUnit,
+  createPropertyForOrganization,
   deletePropertyImage,
   deletePropertyUnit,
   getPropertyEntryReadiness,
@@ -143,4 +144,43 @@ test("canonical readiness reports every incomplete condition and a fully ready p
     const readiness = await getPropertyEntryReadiness("org-a", property.id);
     assert.equal(readiness.readyForProgramAssignment, expected, label);
   }
+});
+
+test("admin-created properties default to pending review", async () => {
+  let createdData: Record<string, unknown> | undefined;
+  prisma.property.create = (async ({ data }: { data: Record<string, unknown> }) => {
+    createdData = data;
+    return data;
+  }) as unknown as typeof prisma.property.create;
+
+  await createPropertyForOrganization("org-a", {
+    title: "New home",
+    description: "A new property",
+    address: "1 Main Street",
+    city: "Austin",
+    state: "TX",
+    rent: 1200,
+    bedrooms: 2,
+    bathrooms: 1,
+    sqft: 900
+  });
+
+  assert.equal(createdData?.publicationStatus, "PENDING_REVIEW");
+  assert.equal(createdData?.publicationStatusSource, "AUTOMATIC");
+});
+
+test("an admin publication decision is marked staff-managed", async () => {
+  installPropertyMocks(completeProperty);
+  let updateData: Record<string, unknown> | undefined;
+  prisma.property.update = (async ({ data }: { data: Record<string, unknown> }) => {
+    updateData = data;
+    return data;
+  }) as unknown as typeof prisma.property.update;
+
+  await updatePropertyForOrganization("org-a", "property-a", { publicationStatus: "REJECTED" });
+
+  assert.deepEqual(updateData, {
+    publicationStatus: "REJECTED",
+    publicationStatusSource: "STAFF"
+  });
 });

@@ -1,6 +1,11 @@
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma/client";
+import {
+  evaluatePropertyForApproval,
+  isPropertyPublicationStatus,
+  type PropertyReviewEvaluation
+} from "@/lib/properties/property-review.service";
 
 const nullableNumber = z.number().finite().nonnegative().nullable().optional();
 
@@ -25,15 +30,15 @@ const sourceImageSchema = z.union([
 
 const sourcePropertySchema = z.object({
   externalId: z.string().trim().min(1),
-  title: z.string().trim().min(1),
-  description: z.string().trim().min(1),
-  address: z.string().trim().min(1),
-  city: z.string().trim().min(1),
-  state: z.string().trim().min(1),
+  title: z.string().trim(),
+  description: z.string().trim(),
+  address: z.string().trim(),
+  city: z.string().trim(),
+  state: z.string().trim(),
   zip: z.string().nullable().optional(),
   rent: z.number().finite().nonnegative(),
   rentMax: nullableNumber,
-  listingType: z.string().trim().min(1).optional(),
+  listingType: z.string().trim().min(1).nullable().optional(),
   salePrice: nullableNumber,
   sourceName: z.string().trim().min(1).optional(),
   sourceUrl: z.string().url().nullable().optional(),
@@ -124,19 +129,20 @@ export function normalizeZillowListing(value: unknown) {
   const listingType = getListingType(input.listing_type);
   const price = numberValue(input.price);
   if (!propertyId) throw new Error("property_id is required");
-  if (!listingType) throw new Error("listing_type must identify a sale or rental listing");
-  if (price === undefined || price < 0 || !Number.isSafeInteger(Math.round(price))) throw new Error("price must be a non-negative finite number");
+  const validPrice = price !== undefined && price > 0 && Number.isSafeInteger(Math.round(price)) && Math.round(price) > 0;
+  const normalizedPrice = validPrice ? Math.round(price) : 0;
 
-  const bedrooms = numberValue(input.bedrooms);
-  const bathrooms = numberValue(input.bathrooms);
-  const livingArea = numberValue(input.living_area);
-  if (bedrooms !== undefined && (!Number.isInteger(bedrooms) || bedrooms < 0)) {
-    throw new Error("bedrooms must be a non-negative integer when provided");
-  }
+  const rawBedrooms = numberValue(input.bedrooms);
+  const bedrooms = rawBedrooms !== undefined && Number.isInteger(rawBedrooms) && rawBedrooms >= 0 ? rawBedrooms : undefined;
+  const rawBathrooms = numberValue(input.bathrooms);
+  const bathrooms = rawBathrooms !== undefined && Number.isSafeInteger(rawBathrooms) && rawBathrooms >= 0 ? rawBathrooms : undefined;
+  const rawLivingArea = numberValue(input.living_area);
+  const livingArea = rawLivingArea !== undefined && rawLivingArea >= 0 ? rawLivingArea : undefined;
   const isRental = listingType === "For Rent";
+  const isSale = listingType === "For Sale";
   const statusParts = [text(input.status), text(input.status_text)].filter((part): part is string => Boolean(part));
   const statusText = statusParts.join(" | ") || null;
-  const statusIsUnavailable = /sold|off.?market|rented|pending|closed|inactive|not available|unavailable/i.test(statusText ?? "");
+  const statusIsUnavailable = /sold|off.?market|rented|pending|closed|inactive|not available|unavailable|coming.?soon/i.test(statusText ?? "");
   const sourceImageUrls = Array.isArray(input.image_urls) ? input.image_urls : [input.image_urls];
   const imageValues = [input.image_url, ...sourceImageUrls, input.tlocal_image];
   const images = [...new Set(imageValues.map(validHttpUrl).filter((url): url is string => Boolean(url)))];
@@ -145,16 +151,36 @@ export function normalizeZillowListing(value: unknown) {
     warnings.push("One or more source image values were not valid HTTP URLs and were not stored as images");
   }
   const isMultiUnit = /multi.?family|apartment building|apartment complex|duplex|triplex|fourplex/i.test(`${text(input.property_type) ?? ""} ${text(input.home_type) ?? ""}`);
-  const suppliedUnits = Array.isArray(input.units) ? input.units : [];
+  const sourceUnits = Array.isArray(input.units) ? input.units : [];
+  const parsedUnits = isRental
+    ? sourceUnits.map((unit) => sourceUnitSchema.safeParse(unit))
+    : [];
+  const suppliedUnits = parsedUnits.flatMap((result) => result.success ? [result.data] : []);
+  const invalidRentalUnits = isRental && suppliedUnits.length !== sourceUnits.length;
   const descriptionProvided = [input.description, input.details_summary, input.property_details]
     .some((candidate) => typeof candidate === "string" && Boolean(text(candidate)));
   const sourceStatusProvided = ["status", "status_text"].some((key) => hasOwn(input, key));
   const sourceImageFields = ["image_url", "image_urls", "tlocal_image"];
   const sourceImagesProvided = sourceImageFields.some((key) => hasOwn(input, key));
   const reviewReasons: string[] = [];
+  if (!listingType) reviewReasons.push("listing_type_missing_or_unsupported");
+  if (!validPrice) reviewReasons.push(isSale ? "sale_price_missing_or_invalid" : "rental_price_missing_or_invalid");
   if (bedrooms === undefined) {
-    warnings.push("bedrooms was missing; stored as 0 because the schema requires an integer, marked for review, and kept unavailable");
-    reviewReasons.push("bedrooms_missing");
+    const reason = rawBedrooms === undefined ? "bedrooms_missing" : "bedrooms_invalid";
+    warnings.push(`bedrooms was ${rawBedrooms === undefined ? "missing" : "invalid"}; stored as 0 and sent for review`);
+    reviewReasons.push(reason);
+  }
+  if (rawBathrooms !== undefined && bathrooms === undefined) {
+    warnings.push("bathrooms was invalid; a schema-safe placeholder will be stored and the property sent for review");
+    reviewReasons.push("bathrooms_invalid");
+  }
+  if (rawLivingArea !== undefined && livingArea === undefined) {
+    warnings.push("living area was invalid and the property was sent for review");
+    reviewReasons.push("living_area_invalid");
+  }
+  if (invalidRentalUnits) {
+    warnings.push("One or more rental units had invalid data and were omitted; the property was sent for review");
+    reviewReasons.push("rental_unit_data_invalid");
   }
   if (isRental && !statusIsUnavailable && suppliedUnits.length === 0) {
     warnings.push("No unit-level data was supplied; no PropertyUnit was created and the rental remains unavailable pending review");
@@ -176,10 +202,10 @@ export function normalizeZillowListing(value: unknown) {
     city: text(input.city) ?? "",
     state: text(input.state) ?? "",
     zip: text(input.zip) ?? null,
-    rent: isRental ? Math.round(price) : 0,
+    rent: isRental ? normalizedPrice : 0,
     rentMax: null,
     listingType,
-    salePrice: isRental ? null : Math.round(price),
+    salePrice: isSale ? normalizedPrice : null,
     sourceName: "Zillow",
     sourceUrl: validHttpUrl(input.property_url) ?? null,
     sourceStatus: statusText,
@@ -199,7 +225,7 @@ export function normalizeZillowListing(value: unknown) {
       latitude: input.latitude === null || numberValue(input.latitude) !== undefined,
       longitude: input.longitude === null || numberValue(input.longitude) !== undefined,
       images: sourceImagesProvided,
-      units: hasOwn(input, "units")
+      units: hasOwn(input, "units") && !invalidRentalUnits
     },
     bedrooms: bedrooms === undefined ? 0 : Math.trunc(bedrooms),
     bathrooms: bathrooms ?? null,
@@ -207,7 +233,9 @@ export function normalizeZillowListing(value: unknown) {
     amenities: [],
     specialOffers: [],
     availabilityCount: isRental && !statusIsUnavailable ? availableUnitCount : 0,
-    status: isRental && !statusIsUnavailable && !needsReview && availableUnitCount > 0 ? "AVAILABLE" : "UNAVAILABLE",
+    status: isRental
+      ? !statusIsUnavailable && availableUnitCount > 0 ? "AVAILABLE" : "UNAVAILABLE"
+      : isSale && !statusIsUnavailable && text(input.status_text)?.toLowerCase() === "active" ? "AVAILABLE" : "UNAVAILABLE",
     lat: numberValue(input.latitude) ?? null,
     lng: numberValue(input.longitude) ?? null,
     units: isRental && !statusIsUnavailable ? suppliedUnits : [],
@@ -248,6 +276,7 @@ export interface PropertyImportResult {
   title?: string;
   status: "CREATED" | "UPDATED" | "SKIPPED" | "FAILED";
   changes?: string[];
+  review?: PropertyReviewEvaluation;
   warnings: string[];
   errors: string[];
 }
@@ -282,7 +311,9 @@ function normalizeProperty(input: SourceProperty) {
   const warnings = Array.isArray((input as SourceProperty & { importWarnings?: unknown }).importWarnings)
     ? (input as SourceProperty & { importWarnings: string[] }).importWarnings
     : [];
-  const unitBathrooms = input.units.map((unit) => unit.bathrooms).filter((value): value is number => typeof value === "number");
+  const unitBathrooms = input.units
+    .map((unit) => unit.bathrooms)
+    .filter((value): value is number => typeof value === "number" && Number.isSafeInteger(value) && value >= 0);
   const bathrooms = input.bathrooms ?? (unitBathrooms.length > 0 ? Math.max(...unitBathrooms) : 1);
   const sqft = input.sqft ?? 0;
 
@@ -330,13 +361,72 @@ function normalizeProperty(input: SourceProperty) {
     units: input.units.map((unit, index) => ({
       key: unit.externalId ? `external:${unit.externalId}` : `row:${index}:${unit.bedrooms}:${unit.rent}`,
       beds: unit.bedrooms,
-      price: unit.rent,
+      price: Math.round(unit.rent),
       available: unit.isAvailable
     })),
     images: [...new Map(input.images.map((image) => {
       const normalized = typeof image === "string" ? { url: image, altText: null } : { url: image.url, altText: image.altText ?? null };
       return [normalized.url, normalized] as const;
     })).values()]
+  };
+}
+
+function evaluateImportedProperty(
+  normalized: ReturnType<typeof normalizeProperty>,
+  options: {
+    duplicateInImport?: boolean;
+    existing?: { publicationStatus?: string; publicationStatusSource?: string } | null;
+    availabilityOverride?: "AVAILABLE" | "UNAVAILABLE" | "UNCERTAIN";
+  } = {}
+): PropertyReviewEvaluation {
+  const property = normalized.data;
+  const existingIsStaffManaged = options.existing?.publicationStatusSource === "STAFF";
+  if (existingIsStaffManaged && !isPropertyPublicationStatus(options.existing?.publicationStatus)) {
+    throw new Error("STAFF_PUBLICATION_STATUS_INVALID");
+  }
+  const staffManagedStatus = isPropertyPublicationStatus(options.existing?.publicationStatus)
+    ? options.existing.publicationStatus
+    : null;
+  return evaluatePropertyForApproval({
+    ...property,
+    externalId: property.externalId ?? null,
+    listingType: property.listingType ?? null,
+    salePrice: property.salePrice ?? null,
+    sourceName: property.sourceName ?? null,
+    sourceMetadata: property.sourceMetadata,
+    units: normalized.units,
+    images: normalized.images
+  }, {
+    duplicateInImport: options.duplicateInImport,
+    staffManaged: existingIsStaffManaged,
+    staffManagedStatus,
+    availabilityOverride: options.availabilityOverride
+  });
+}
+
+function withPublicationEvaluation(
+  normalized: ReturnType<typeof normalizeProperty>,
+  evaluation: PropertyReviewEvaluation,
+  publicationStatusSource = "AUTOMATIC"
+) {
+  const sourceMetadata = metadataRecord(normalized.data.sourceMetadata);
+  return {
+    ...normalized,
+    data: {
+      ...normalized.data,
+      publicationStatus: evaluation.decision,
+      publicationStatusSource,
+      sourceMetadata: {
+        ...sourceMetadata,
+        importReview: {
+          required: evaluation.decision === "PENDING_REVIEW",
+          decision: evaluation.decision,
+          automaticDecision: evaluation.automaticDecision,
+          availability: evaluation.availability,
+          reasons: evaluation.reasons
+        }
+      }
+    }
   };
 }
 
@@ -483,7 +573,7 @@ async function syncZillowUnits(transaction: ImportTransaction, propertyId: strin
   return { ids: nextIds, changed };
 }
 
-async function persistProperty(organizationId: string, property: ReturnType<typeof normalizeProperty>) {
+async function persistProperty(organizationId: string, property: ReturnType<typeof withPublicationEvaluation>) {
   return prisma.$transaction(async (transaction) => {
     const saved = await transaction.property.create({ data: { ...property.data, organizationId } });
     const isZillow = isZillowProperty({ externalId: property.data.externalId, sourceName: property.data.sourceName });
@@ -553,7 +643,7 @@ const sourceFieldLabels: Partial<Record<keyof ZillowSourcePresence, [string, str
 async function updateZillowProperty(
   existing: NonNullable<Awaited<ReturnType<typeof findExistingProperty>>>,
   organizationId: string,
-  property: ReturnType<typeof normalizeProperty>
+  property: ReturnType<typeof withPublicationEvaluation>
 ) {
   const presence = property.sourcePresence;
   const previousMetadata = metadataRecord(existing.sourceMetadata);
@@ -565,8 +655,14 @@ async function updateZillowProperty(
     sourceName: "Zillow",
     listingType: property.data.listingType,
     rent: property.data.rent,
-    salePrice: property.data.salePrice
+    salePrice: property.data.salePrice,
+    publicationStatus: property.data.publicationStatus,
+    publicationStatusSource: property.data.publicationStatusSource
   };
+  if (existing.publicationStatusSource === "STAFF") {
+    delete patch.publicationStatus;
+    delete patch.publicationStatusSource;
+  }
 
   if (presence) {
     for (const [sourceField, [dataField]] of Object.entries(sourceFieldLabels) as Array<[keyof ZillowSourcePresence, [string, string]]>) {
@@ -574,7 +670,10 @@ async function updateZillowProperty(
     }
   }
 
-  if (property.data.listingType === "For Sale" || property.data.status === "UNAVAILABLE") {
+  if (property.data.listingType === "For Sale") {
+    patch.status = property.data.status;
+    patch.availabilityCount = 0;
+  } else if (property.data.status === "UNAVAILABLE") {
     patch.status = "UNAVAILABLE";
     patch.availabilityCount = 0;
   } else if (managedUnitState.ownershipUnverified) {
@@ -641,7 +740,7 @@ async function updateZillowProperty(
     propertyId: existing.id,
     changes,
     warnings: managedUnitState.ownershipUnverified
-      ? ["Legacy rental units could not be confidently attributed to Zillow; existing units were preserved and this listing remains unavailable pending review."]
+      ? ["Legacy rental units could not be confidently attributed to Zillow; existing units were preserved and require review before use as rental availability."]
       : []
   };
 }
@@ -661,6 +760,7 @@ export async function importProperties(body: unknown, options: PropertyImportOpt
 
   const adapted = rawProperties.map(adaptIncomingProperty);
   const duplicateIndexes = new Set<number>();
+  const externalIdCounts = new Map<string, number>();
   const seenIds = new Set<string>();
   for (const [index, item] of adapted.entries()) {
     const raw = item.value;
@@ -668,6 +768,7 @@ export async function importProperties(body: unknown, options: PropertyImportOpt
     if (externalId) {
       if (seenIds.has(externalId)) duplicateIndexes.add(index);
       seenIds.add(externalId);
+      externalIdCounts.set(externalId, (externalIdCounts.get(externalId) ?? 0) + 1);
     }
   }
 
@@ -730,8 +831,8 @@ export async function importProperties(body: unknown, options: PropertyImportOpt
         continue;
       }
 
-      const normalized = normalizeProperty(parsed.data);
-      const warnings = new Set(normalized.warnings);
+      const normalizedInput = normalizeProperty(parsed.data);
+      const warnings = new Set(normalizedInput.warnings);
       for (const field of unsupportedFields) {
         const hasUnsupportedField = field === "units[].externalId"
           ? parsed.data.units.some((unit) => unit.externalId !== undefined)
@@ -743,27 +844,42 @@ export async function importProperties(body: unknown, options: PropertyImportOpt
         if (hasUnsupportedField) warnings.add(`${field} is not stored by the current schema`);
       }
 
+      const existingMetadata = metadataRecord(existing?.sourceMetadata);
+      const previousListing = sourceListingFromMetadata(existingMetadata);
+      const unitOwnership = existing
+        ? getManagedUnitState(existingMetadata, previousListing, existing.units)
+        : { ownershipUnverified: false };
+      if (unitOwnership.ownershipUnverified) {
+        warnings.add("Legacy rental units could not be confidently attributed to Zillow; existing units were preserved and require review before use as rental availability.");
+      }
+      const review = evaluateImportedProperty(normalizedInput, {
+        duplicateInImport: (externalIdCounts.get(externalId) ?? 0) > 1,
+        existing,
+        availabilityOverride: unitOwnership.ownershipUnverified && normalizedInput.data.listingType !== "For Sale"
+          ? "UNAVAILABLE"
+          : undefined
+      });
+      const normalized = withPublicationEvaluation(
+        normalizedInput,
+        review,
+        existing?.publicationStatusSource === "STAFF" ? "STAFF" : "AUTOMATIC"
+      );
+
       if (existing) {
-        const existingMetadata = metadataRecord(existing.sourceMetadata);
-        const previousListing = sourceListingFromMetadata(existingMetadata);
-        const unitOwnership = getManagedUnitState(existingMetadata, previousListing, existing.units);
-        if (unitOwnership.ownershipUnverified) {
-          warnings.add("Legacy rental units could not be confidently attributed to Zillow; existing units were preserved and this listing remains unavailable pending review.");
-        }
         if (dryRun) {
           summary.updated++;
-          results.push({ externalId, propertyId: existing.id, title: normalized.data.title, status: "UPDATED", changes: ["preview only"], warnings: [...warnings], errors: [] });
+          results.push({ externalId, propertyId: existing.id, title: normalized.data.title, status: "UPDATED", changes: ["preview only"], review, warnings: [...warnings], errors: [] });
         } else {
           const update = await updateZillowProperty(existing, options.organizationId, normalized);
           for (const warning of update.warnings) warnings.add(warning);
           const status = update.changes.length > 0 ? "UPDATED" : "SKIPPED";
           summary[status === "UPDATED" ? "updated" : "skipped"]++;
-          results.push({ externalId, propertyId: update.propertyId, title: normalized.data.title, status, changes: update.changes, warnings: [...warnings], errors: [] });
+          results.push({ externalId, propertyId: update.propertyId, title: normalized.data.title, status, changes: update.changes, review, warnings: [...warnings], errors: [] });
         }
       } else {
         const saved = dryRun ? null : await persistProperty(options.organizationId, normalized);
         summary.created++;
-        results.push({ externalId, propertyId: saved?.id, title: normalized.data.title, status: "CREATED", warnings: [...warnings], errors: [] });
+        results.push({ externalId, propertyId: saved?.id, title: normalized.data.title, status: "CREATED", review, warnings: [...warnings], errors: [] });
       }
       for (const warning of warnings) topWarnings.add(`${externalId}: ${warning}`);
     } catch (error) {
@@ -779,11 +895,20 @@ export async function importProperties(body: unknown, options: PropertyImportOpt
           const racedInput = normalizeZillowListing(mergeZillowListing(racedProperty.sourceMetadata, item.zillowListing));
           const racedParsed = sourcePropertySchema.safeParse(racedInput);
           if (!racedParsed.success) throw new Error("Unable to validate concurrent Zillow update");
-          const racedNormalized = normalizeProperty(racedParsed.data);
+          const racedNormalizedInput = normalizeProperty(racedParsed.data);
+          const racedReview = evaluateImportedProperty(racedNormalizedInput, {
+            duplicateInImport: (externalIdCounts.get(externalId) ?? 0) > 1,
+            existing: racedProperty
+          });
+          const racedNormalized = withPublicationEvaluation(
+            racedNormalizedInput,
+            racedReview,
+            racedProperty.publicationStatusSource === "STAFF" ? "STAFF" : "AUTOMATIC"
+          );
           const update = await updateZillowProperty(racedProperty, options.organizationId, racedNormalized);
           const status = update.changes.length > 0 ? "UPDATED" : "SKIPPED";
           summary[status === "UPDATED" ? "updated" : "skipped"]++;
-          results.push({ externalId, propertyId: update.propertyId, title: racedNormalized.data.title, status, changes: update.changes, warnings: [...racedNormalized.warnings, ...update.warnings], errors: [] });
+          results.push({ externalId, propertyId: update.propertyId, title: racedNormalized.data.title, status, changes: update.changes, review: racedReview, warnings: [...racedNormalized.warnings, ...update.warnings], errors: [] });
           continue;
         }
         if (conflict) {

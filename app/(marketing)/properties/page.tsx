@@ -1,118 +1,121 @@
+import Image from "next/image";
 import Link from "next/link";
-import { MapPin, ShieldCheck, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowRight, CheckCircle2, Home, KeyRound, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageShell } from "@/components/shared/page-shell";
 import { PropertyCard } from "@/components/property/property-card";
-import { listPublicProperties, countPublicProperties } from "@/lib/properties/public-property.service";
+import { ResilientImage } from "@/components/marketing/resilient-image";
+import { HERO_IMAGES } from "@/lib/landing-images";
+import { listPublicProperties } from "@/lib/properties/public-property.service";
 
-const PAGE_SIZE = 12;
-
-export default async function Page({
-  searchParams
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  const params = await searchParams;
-  const pageParam = typeof params.page === "string" ? parseInt(params.page, 10) : 1;
-  const currentPage = Math.max(1, isNaN(pageParam) ? 1 : pageParam);
-  const offset = (currentPage - 1) * PAGE_SIZE;
-
-  const [properties, totalCount] = await Promise.all([
-    listPublicProperties({ limit: PAGE_SIZE, offset }),
-    countPublicProperties()
+export default async function PropertiesLandingPage() {
+  const [rentals, homesForSale] = await Promise.all([
+    listPublicProperties({ listingType: "RENT", limit: 3 }),
+    listPublicProperties({ listingType: "SALE", limit: 3 })
   ]);
-
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  const featuredProperties = [...rentals, ...homesForSale];
 
   return (
     <PageShell>
-      <section className="rounded-[32px] bg-white px-6 py-10 shadow-soft md:px-10 md:py-14">
-        <div className="grid gap-8 lg:grid-cols-[0.95fr_0.8fr] lg:items-center">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand">Available housing</p>
-            <h1 className="mt-4 text-4xl font-semibold tracking-tight text-slate-950 md:text-5xl">Supportive homes you can apply for today.</h1>
-            <p className="mt-6 max-w-2xl text-base leading-8 text-slate-600">Explore current housing opportunities and take the next step with clear, guided support.</p>
-            <div className="mt-8 flex flex-col gap-4 sm:flex-row">
-              <Button asChild className="min-w-[170px]"><Link href="#featured-listings">Explore opportunities</Link></Button>
-              <Button asChild variant="outline" className="min-w-[170px]"><Link href="/eligibility">Check eligibility</Link></Button>
-            </div>
-          </div>
-          <div className="grid gap-4 rounded-[32px] bg-brand/10 p-6 text-slate-950 shadow-soft">
-            <div className="rounded-[28px] bg-white p-5 shadow-sm">
-              <div className="flex items-center gap-3 text-brand"><MapPin className="h-5 w-5" /><p className="text-sm font-semibold uppercase tracking-[0.24em]">Housing opportunities</p></div>
-              <p className="mt-4 text-sm text-slate-600">Browse properties published through Heloci and review the details available for each home.</p>
-            </div>
-            <div className="rounded-[28px] bg-white p-5 shadow-sm">
-              <div className="flex items-center gap-3 text-brand"><ShieldCheck className="h-5 w-5" /><p className="text-sm font-semibold uppercase tracking-[0.24em]">Guided applications</p></div>
-              <p className="mt-4 text-sm text-slate-600">Use eligibility guidance and application support to understand what comes next.</p>
-            </div>
+      <section className="relative isolate overflow-hidden rounded-[32px] bg-slate-950 px-6 py-12 shadow-soft md:px-12 md:py-16">
+        <div className="absolute inset-0 -z-10 opacity-35">
+          <ResilientImage src={HERO_IMAGES[0].src} alt="" fill sizes="100vw" className="object-cover" priority />
+        </div>
+        <div className="absolute inset-0 -z-10 bg-gradient-to-r from-slate-950 via-slate-950/85 to-slate-950/30" />
+        <div className="max-w-3xl text-white">
+          <p className="text-sm font-semibold uppercase tracking-[0.22em] text-blue-200">HELOCI housing discovery</p>
+          <h1 className="mt-4 text-4xl font-semibold tracking-tight md:text-6xl">Find a place to call home.</h1>
+          <p className="mt-5 max-w-2xl text-base leading-8 text-slate-200 md:text-lg">
+            Discover housing opportunities with clear details and supportive guidance for your next step.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link href="/properties/rent" className="inline-flex min-h-12 items-center rounded-full bg-white px-6 text-sm font-semibold text-brand transition hover:bg-blue-50">
+              Explore rentals <ArrowRight aria-hidden="true" className="ml-2 h-4 w-4" />
+            </Link>
+            <Link href="/properties/buy" className="inline-flex min-h-12 items-center rounded-full border border-white/60 bg-white/10 px-6 text-sm font-semibold text-white transition hover:bg-white/20">
+              Explore homes for sale <ArrowRight aria-hidden="true" className="ml-2 h-4 w-4" />
+            </Link>
           </div>
         </div>
       </section>
 
-      <section id="featured-listings" className="rounded-[32px] bg-slate-50 p-6 shadow-soft md:p-10">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-brand">Published properties</p>
-            <h2 className="mt-3 text-3xl font-semibold text-slate-950">Housing opportunities available through Heloci.</h2>
-            {totalCount > 0 && (
-              <p className="mt-2 text-sm text-slate-600">
-                Showing {offset + 1}–{Math.min(offset + PAGE_SIZE, totalCount)} of {totalCount} properties
-              </p>
-            )}
-          </div>
+      <section aria-labelledby="choose-journey" className="space-y-5">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">Choose your next step</p>
+          <h2 id="choose-journey" className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">Rent or buy—with the right details up front.</h2>
         </div>
-        {properties.length > 0 ? (
-          <>
-            <div className="mt-8 grid gap-6 lg:grid-cols-3">
-              {properties.map((property) => (
-                <PropertyCard key={property.id} property={property} />
-              ))}
+        <div className="grid gap-6 lg:grid-cols-2">
+          <article className="group relative isolate flex min-h-[320px] flex-col justify-end overflow-hidden rounded-[28px] bg-slate-900 p-7 text-white shadow-card md:p-9">
+            <Image src={HERO_IMAGES[1].src} alt="" fill sizes="(max-width: 1024px) 100vw, 50vw" className="-z-20 object-cover transition duration-500 group-hover:scale-[1.03]" />
+            <div className="absolute inset-0 -z-10 bg-gradient-to-t from-slate-950/90 via-slate-950/45 to-transparent" />
+            <span className="mb-4 inline-flex w-fit items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold tracking-wider text-white backdrop-blur-sm">
+              <KeyRound aria-hidden="true" className="h-4 w-4" /> RENT A HOME
+            </span>
+            <h3 className="text-2xl font-semibold md:text-3xl">A rental that fits your next chapter.</h3>
+            <p className="mt-3 max-w-lg text-sm leading-6 text-slate-200">Browse available apartments and houses, compare monthly rent, and review rental details.</p>
+            <Link href="/properties/rent" className="mt-6 inline-flex min-h-11 w-fit items-center gap-2 rounded-full bg-white px-5 text-sm font-semibold text-slate-950 transition hover:bg-blue-50">
+              Rent a home <ArrowRight aria-hidden="true" className="h-4 w-4" />
+            </Link>
+          </article>
+          <article className="group relative isolate flex min-h-[320px] flex-col justify-end overflow-hidden rounded-[28px] bg-slate-900 p-7 text-white shadow-card md:p-9">
+            <Image src={HERO_IMAGES[3].src} alt="" fill sizes="(max-width: 1024px) 100vw, 50vw" className="-z-20 object-cover transition duration-500 group-hover:scale-[1.03]" />
+            <div className="absolute inset-0 -z-10 bg-gradient-to-t from-slate-950/90 via-slate-950/45 to-transparent" />
+            <span className="mb-4 inline-flex w-fit items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold tracking-wider text-white backdrop-blur-sm">
+              <Home aria-hidden="true" className="h-4 w-4" /> BUY A HOME
+            </span>
+            <h3 className="text-2xl font-semibold md:text-3xl">Explore homes available to purchase.</h3>
+            <p className="mt-3 max-w-lg text-sm leading-6 text-slate-200">See total sale prices and property details, then contact HELOCI for guidance on next steps.</p>
+            <Link href="/properties/buy" className="mt-6 inline-flex min-h-11 w-fit items-center gap-2 rounded-full bg-white px-5 text-sm font-semibold text-slate-950 transition hover:bg-blue-50">
+              Buy a home <ArrowRight aria-hidden="true" className="h-4 w-4" />
+            </Link>
+          </article>
+        </div>
+      </section>
+
+      {featuredProperties.length > 0 && (
+        <section aria-labelledby="featured-properties">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">Featured opportunities</p>
+              <h2 id="featured-properties" className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">A few places to get started.</h2>
             </div>
-            {totalPages > 1 && (
-              <div className="mt-8 flex items-center justify-center gap-2">
-                <Button
-                  asChild
-                  variant="outline"
-                  disabled={currentPage <= 1}
-                  className="disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Link href={`/properties?page=${currentPage - 1}`}>
-                    <ChevronLeft className="h-4 w-4 mr-1" />
-                    Previous
-                  </Link>
-                </Button>
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                    <Button
-                      key={page}
-                      asChild
-                      variant={page === currentPage ? "primary" : "outline"}
-                      size="sm"
-                    >
-                      <Link href={`/properties?page=${page}`}>{page}</Link>
-                    </Button>
-                  ))}
-                </div>
-                <Button
-                  asChild
-                  variant="outline"
-                  disabled={currentPage >= totalPages}
-                  className="disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Link href={`/properties?page=${currentPage + 1}`}>
-                    Next
-                    <ChevronRight className="h-4 w-4 ml-1" />
-                  </Link>
-                </Button>
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="mt-8 rounded-[28px] border border-border bg-white px-6 py-12 text-center">
-            <p className="text-base text-slate-600">Housing opportunities will appear here once properties are published.</p>
+            <Link href="/properties/rent" className="inline-flex items-center gap-2 text-sm font-semibold text-brand hover:text-brandHover">
+              Explore rentals <ArrowRight aria-hidden="true" className="h-4 w-4" />
+            </Link>
           </div>
-        )}
+          <div className="mt-6 grid items-stretch gap-6 sm:grid-cols-2 xl:grid-cols-3">
+            {featuredProperties.map((property) => <PropertyCard key={property.id} property={property} />)}
+          </div>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Button asChild><Link href="/properties/rent">View all rentals</Link></Button>
+            <Button asChild variant="outline"><Link href="/properties/buy">View homes for sale</Link></Button>
+          </div>
+        </section>
+      )}
+
+      <section id="how-it-works" className="rounded-[32px] bg-white p-7 shadow-soft md:p-10" aria-labelledby="discovery-steps">
+        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">How it works</p>
+        <h2 id="discovery-steps" className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">Clear choices, supportive next steps.</h2>
+        <div className="mt-7 grid gap-6 md:grid-cols-3">
+          {[
+            { title: "Choose rent or buy", description: "Start with the type of housing opportunity you are looking for.", icon: Home },
+            { title: "Review property details", description: "Compare pricing, location, and the information available for each property.", icon: CheckCircle2 },
+            { title: "Get guidance", description: "Rental seekers can check eligibility. For purchase questions, contact HELOCI for next steps.", icon: ShieldCheck }
+          ].map(({ title, description, icon: Icon }, index) => (
+            <div key={title} className="rounded-2xl border border-border bg-slate-50 p-5">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand/10 text-sm font-bold text-brand">
+                {index + 1}
+              </div>
+              <Icon aria-hidden="true" className="mt-4 h-5 w-5 text-brand" />
+              <h3 className="mt-3 font-semibold text-slate-950">{title}</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
+            </div>
+          ))}
+        </div>
+        <div className="mt-7 flex flex-wrap gap-3">
+          <Button asChild><Link href="/properties">Browse all properties</Link></Button>
+          <Button asChild variant="outline"><Link href="/eligibility">Check rental eligibility</Link></Button>
+        </div>
       </section>
     </PageShell>
   );

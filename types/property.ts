@@ -24,6 +24,8 @@ export interface PropertyLocation {
 export interface Property {
   id: string;
   externalId?: string | null;
+  listingType?: string | null;
+  salePrice?: number | null;
   title: string;
   description: string;
   address: string;
