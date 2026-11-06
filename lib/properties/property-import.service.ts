@@ -6,6 +6,7 @@ import {
   isPropertyPublicationStatus,
   type PropertyReviewEvaluation
 } from "@/lib/properties/property-review.service";
+import { normalizeZillowSaleAvailability } from "@/lib/properties/zillow-listing-status";
 
 const nullableNumber = z.number().finite().nonnegative().nullable().optional();
 
@@ -143,6 +144,7 @@ export function normalizeZillowListing(value: unknown) {
   const statusParts = [text(input.status), text(input.status_text)].filter((part): part is string => Boolean(part));
   const statusText = statusParts.join(" | ") || null;
   const statusIsUnavailable = /sold|off.?market|rented|pending|closed|inactive|not available|unavailable|coming.?soon/i.test(statusText ?? "");
+  const saleAvailability = isSale ? normalizeZillowSaleAvailability(input) : null;
   const sourceImageUrls = Array.isArray(input.image_urls) ? input.image_urls : [input.image_urls];
   const imageValues = [input.image_url, ...sourceImageUrls, input.tlocal_image];
   const images = [...new Set(imageValues.map(validHttpUrl).filter((url): url is string => Boolean(url)))];
@@ -185,6 +187,9 @@ export function normalizeZillowListing(value: unknown) {
   if (isRental && !statusIsUnavailable && suppliedUnits.length === 0) {
     warnings.push("No unit-level data was supplied; no PropertyUnit was created and the rental remains unavailable pending review");
     reviewReasons.push(isMultiUnit ? "multi_unit_requires_unit_data" : "rental_requires_unit_data");
+  }
+  if (isSale && saleAvailability !== "AVAILABLE") {
+    reviewReasons.push(saleAvailability === "UNAVAILABLE" ? "source_listing_inactive" : "source_availability_uncertain");
   }
 
   const availableUnitCount = suppliedUnits.filter((unit) => asRecord(unit) && unit.isAvailable === true).length;
@@ -235,7 +240,7 @@ export function normalizeZillowListing(value: unknown) {
     availabilityCount: isRental && !statusIsUnavailable ? availableUnitCount : 0,
     status: isRental
       ? !statusIsUnavailable && availableUnitCount > 0 ? "AVAILABLE" : "UNAVAILABLE"
-      : isSale && !statusIsUnavailable && text(input.status_text)?.toLowerCase() === "active" ? "AVAILABLE" : "UNAVAILABLE",
+      : saleAvailability === "AVAILABLE" ? "AVAILABLE" : "UNAVAILABLE",
     lat: numberValue(input.latitude) ?? null,
     lng: numberValue(input.longitude) ?? null,
     units: isRental && !statusIsUnavailable ? suppliedUnits : [],

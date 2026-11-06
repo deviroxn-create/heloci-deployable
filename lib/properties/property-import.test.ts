@@ -161,6 +161,63 @@ test("dry-run normalizes nullable fields, reports warnings, and does not write",
   assert.deepEqual(result.errors, []);
 });
 
+test("normalizes a Zillow House for sale listing to available with the sale price", () => {
+  const normalized = normalizeZillowListing({
+    property_id: "52410627",
+    listing_type: "For Sale",
+    price: "$449,900",
+    address: "3019 Brook Shore Ct, Kingwood, TX 77345",
+    property_name: "3019 Brook Shore Ct",
+    bedrooms: 4,
+    bathrooms: 4,
+    property_url: "https://www.zillow.com/homedetails/3019-Brook-Shore-Ct-Kingwood-TX-77345/52410627_zpid/",
+    image_url: "https://photos.zillowstatic.com/fp/3c828e05c24e20dd38a962cda4d04424-p_e.jpg",
+    image_urls: ["https://photos.zillowstatic.com/fp/3c828e05c24e20dd38a962cda4d04424-p_e.jpg"],
+    description: "",
+    status: "House for sale",
+    status_text: "House for sale",
+    city: "Kingwood",
+    state: "TX",
+    zip: "77345",
+    property_type: "SINGLE_FAMILY",
+    home_type: "SINGLE_FAMILY",
+    living_area: 3295,
+    details_summary: "4 bed, 4 bath, 3295 sq ft | SINGLE_FAMILY | House for sale",
+    property_details: {
+      status_text: "House for sale",
+      status: "House for sale",
+      marketing_status: "FOR_SALE"
+    },
+    marketing_status: "FOR_SALE"
+  });
+
+  assert.equal(normalized.listingType, "For Sale");
+  assert.equal(normalized.status, "AVAILABLE");
+  assert.equal(normalized.salePrice, 449900);
+});
+
+test("sale normalization rejects inactive statuses and reviews unknown or conflicting statuses", () => {
+  const base = {
+    property_id: "sale-status",
+    listing_type: "For Sale",
+    price: "$449,900",
+    status: "House for sale",
+    status_text: "House for sale"
+  };
+  for (const status of ["Sold", "Pending", "Under contract", "Withdrawn", "Off market", "Delisted", "Expired"]) {
+    const normalized = normalizeZillowListing({ ...base, status_text: status });
+    assert.equal(normalized.status, "UNAVAILABLE", status);
+    assert.ok(normalized.sourceMetadata.importReview.reasons.includes("source_listing_inactive"), status);
+  }
+  const unknown = normalizeZillowListing({ ...base, status_text: "Coming soon maybe" });
+  assert.equal(unknown.status, "UNAVAILABLE");
+  assert.ok(unknown.sourceMetadata.importReview.reasons.includes("source_availability_uncertain"));
+
+  const conflicting = normalizeZillowListing({ ...base, status_text: "Sold", marketing_status: "FOR_SALE" });
+  assert.equal(conflicting.status, "UNAVAILABLE");
+  assert.ok(conflicting.sourceMetadata.importReview.reasons.includes("source_listing_inactive"));
+});
+
 test("non-array payload errors are top-level and have no row results", async () => {
   const result = await importProperties({ properties: "not-an-array" }, { organizationId: "org-a" });
 
@@ -441,16 +498,22 @@ test("refreshes Zillow images, preserves manual images, and remains duplicate-fr
 });
 
 test("repeat imports preserve staff rejection and unpublished decisions", async () => {
+  const activeSale = {
+    ...losAngelesSale,
+    status: "House for sale",
+    status_text: "House for sale",
+    marketing_status: "FOR_SALE"
+  };
   for (const publicationStatus of ["REJECTED", "APPROVED_UNPUBLISHED"]) {
     const fixture = installExistingZillowProperty({
-      listing: losAngelesSale,
+      listing: activeSale,
       publicationStatus,
       publicationStatusSource: "STAFF"
     });
 
     try {
       const result = await importProperties([{
-        ...losAngelesSale,
+        ...activeSale,
         property_name: `${publicationStatus} remains`
       }], { organizationId: "org-a" });
 

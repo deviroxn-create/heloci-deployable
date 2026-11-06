@@ -1,3 +1,5 @@
+import { normalizeZillowSaleAvailability } from "@/lib/properties/zillow-listing-status";
+
 export const PROPERTY_PUBLICATION_STATUSES = [
   "PENDING_REVIEW",
   "APPROVED_UNPUBLISHED",
@@ -77,12 +79,7 @@ function hasConfirmedUnavailableSourceStatus(listing: Record<string, unknown>): 
 }
 
 function saleAvailability(listing: Record<string, unknown> | null): PropertyAvailability {
-  if (!listing) return "UNCERTAIN";
-  if (hasConfirmedUnavailableSourceStatus(listing)) return "UNAVAILABLE";
-
-  // Zillow's "FOR_SALE" category is not an availability signal. Only the
-  // observed, explicit status_text value "Active" confirms sale availability.
-  return normalizeSourceStatus(listing.status_text) === "active" ? "AVAILABLE" : "UNCERTAIN";
+  return listing ? normalizeZillowSaleAvailability(listing) : "UNCERTAIN";
 }
 
 function rentalAvailability(

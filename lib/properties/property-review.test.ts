@@ -75,6 +75,51 @@ test("complete sale automatically qualifies only with explicit positive source a
   assert.equal(result.availability, "AVAILABLE");
 });
 
+test("sale status variants in the Zillow record confirm availability", () => {
+  const variants = [
+    { status: "Active" },
+    { status: "For Sale" },
+    { status: "House for sale" },
+    { marketing_status: "FOR_SALE" },
+    { property_details: { status: "House for sale", status_text: "For Sale", marketing_status: "FOR_SALE" } }
+  ];
+
+  for (const status of variants) {
+    const result = evaluatePropertyForApproval({
+      ...completeSale,
+      sourceMetadata: { sourceListing: { ...saleListing, status_text: undefined, ...status } }
+    });
+
+    assert.equal(result.availability, "AVAILABLE", JSON.stringify(status));
+    assert.equal(result.decision, "PUBLISHED", JSON.stringify(status));
+  }
+});
+
+test("Zillow House for sale sample normalizes as an available sale with its purchase price", () => {
+  const result = evaluatePropertyForApproval({
+    ...completeSale,
+    salePrice: 449900,
+    sourceMetadata: {
+      sourceListing: {
+        ...saleListing,
+        property_id: "52410627",
+        listing_type: "For Sale",
+        status: "House for sale",
+        status_text: "House for sale",
+        property_details: {
+          status: "House for sale",
+          status_text: "House for sale",
+          marketing_status: "FOR_SALE"
+        }
+      }
+    }
+  });
+
+  assert.equal(result.availability, "AVAILABLE");
+  assert.equal(result.decision, "PUBLISHED");
+  assert.equal(result.reasons.includes("sale_price_missing_or_invalid"), false);
+});
+
 test("missing rental price is sent for manual review", () => {
   const result = evaluatePropertyForApproval({ ...completeRental, rent: 0 });
 
@@ -96,15 +141,26 @@ test("missing address is sent for manual review", () => {
   assert.ok(result.reasons.includes("address_incomplete"));
 });
 
-test("sale availability is uncertain unless the source explicitly reports Active", () => {
+test("sale availability is uncertain when source status is unknown", () => {
   const result = evaluatePropertyForApproval({
     ...completeSale,
-    sourceMetadata: { sourceListing: { ...saleListing, status_text: undefined } }
+    sourceMetadata: { sourceListing: { ...saleListing, status_text: "For sale soon" } }
   });
 
   assert.equal(result.decision, "PENDING_REVIEW");
   assert.equal(result.availability, "UNCERTAIN");
   assert.ok(result.reasons.includes("availability_not_confirmed"));
+});
+
+test("conflicting active and inactive sale statuses remain unavailable and require review", () => {
+  const result = evaluatePropertyForApproval({
+    ...completeSale,
+    sourceMetadata: { sourceListing: { ...saleListing, status_text: "House for sale", marketing_status: "PENDING" } }
+  });
+
+  assert.equal(result.availability, "UNAVAILABLE");
+  assert.equal(result.decision, "PENDING_REVIEW");
+  assert.ok(result.reasons.includes("listing_confirmed_unavailable"));
 });
 
 test("confirmed unavailable properties are never published", () => {
@@ -117,11 +173,20 @@ test("confirmed unavailable properties are never published", () => {
     ...completeSale,
     sourceMetadata: { sourceListing: { ...saleListing, status_text: "Sold" } }
   });
+  const inactiveStatuses = ["Sold", "Pending", "Under contract", "Withdrawn", "Off market", "Delisted", "Expired"];
+  const inactiveSales = inactiveStatuses.map((status) => evaluatePropertyForApproval({
+    ...completeSale,
+    sourceMetadata: { sourceListing: { ...saleListing, status_text: status } }
+  }));
 
   assert.equal(rental.decision, "PENDING_REVIEW");
   assert.equal(rental.availability, "UNAVAILABLE");
   assert.equal(sale.decision, "PENDING_REVIEW");
   assert.equal(sale.availability, "UNAVAILABLE");
+  for (const result of inactiveSales) {
+    assert.equal(result.availability, "UNAVAILABLE");
+    assert.equal(result.decision, "PENDING_REVIEW");
+  }
 });
 
 test("staff rejection and publication decisions survive automatic evaluation", () => {
