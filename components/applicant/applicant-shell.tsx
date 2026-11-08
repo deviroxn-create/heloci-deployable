@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useEffect, useState } from "react";
-import { ArrowRight, Building2, Check, ClipboardList, FileText, Home, LogOut, Menu, MessageSquare, Settings, X } from "lucide-react";
+import { ArrowRight, Building2, Check, ClipboardList, FileText, Home, KeyRound, LogOut, Menu, MessageSquare, Settings, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UserBadge } from "@/components/shared/user-badge";
 import { supabase } from "@/lib/supabase/client";
@@ -12,6 +12,8 @@ const navItems = [
   { label: "My Account", href: "/applicant/dashboard", icon: Home },
   { label: "Applications", href: "/applicant/applications", icon: ClipboardList },
   { label: "Available properties", href: "/applicant/properties", icon: Building2 },
+  { label: "Rent", href: "/properties/rent", icon: KeyRound },
+  { label: "Buy", href: "/properties/buy", icon: Home },
   { label: "Documents", href: "/applicant/documents", icon: FileText },
   { label: "Messages", href: "/applicant/messages", icon: MessageSquare },
   { label: "Settings", href: "/applicant/settings", icon: Settings }

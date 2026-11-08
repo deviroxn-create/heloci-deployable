@@ -46,8 +46,19 @@ export default function ApplicantPropertiesPage() {
   return (
     <ApplicantShell
       title="Available properties"
-      description="Browse properties currently available through your housing programs."
+      description="Browse public rentals and homes for sale, and review rentals available through your housing programs."
     >
+      <section aria-labelledby="public-property-listings" className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">Public listings</p>
+        <h2 id="public-property-listings" className="mt-2 text-xl font-semibold text-slate-950">Explore all published properties</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          Browse available rentals and homes for sale using the same public inventory available to every visitor.
+        </p>
+        <div className="mt-5 flex flex-wrap gap-3">
+          <Button asChild><Link href="/properties/rent">Browse rentals</Link></Button>
+          <Button asChild variant="outline"><Link href="/properties/buy">Browse homes for sale</Link></Button>
+        </div>
+      </section>
       {loading ? (
         <div className="flex items-center gap-3 rounded-3xl border border-slate-200 bg-white p-8 text-slate-600 shadow-sm">
           <Loader2 className="h-5 w-5 animate-spin text-brand" />

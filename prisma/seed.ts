@@ -569,7 +569,8 @@ async function main() {
         specialOffers: p.specialOffers,
         contactPhone: p.contactPhone,
         availabilityCount: p.availabilityCount,
-        status: p.availabilityCount > 0 ? "AVAILABLE" : "UNAVAILABLE"
+        status: p.availabilityCount > 0 ? "AVAILABLE" : "UNAVAILABLE",
+        availabilityStatusSource: "AUTOMATIC"
       }
     });
 

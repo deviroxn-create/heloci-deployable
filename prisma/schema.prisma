@@ -67,42 +67,43 @@ model User {
 }
 
 model Property {
-  id                String            @id @default(cuid())
-  externalId        String?           @unique
-  listingType       String?
-  salePrice         Int?
-  sourceName        String?
-  sourceUrl         String?
-  sourceStatus      String?
-  sourceMetadata    Json?
-  title             String
-  description       String
-  address           String
-  city              String
-  state             String
-  zip               String?
-  latitude          Float?
-  longitude         Float?
-  rent              Int
-  rentMax           Int?
-  bedrooms          Int
-  bathrooms         Int
-  sqft              Int
-  amenities         String[]
-  specialOffers     String[]
-  contactPhone      String?
-  availabilityCount Int               @default(0)
-  status            String            @default("AVAILABLE")
-  publicationStatus String            @default("PENDING_REVIEW")
-  publicationStatusSource String      @default("AUTOMATIC")
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-  organizationId    String?
-  applications      Application[]
-  programProperties ProgramProperty[]
-  organization      Organization?     @relation(fields: [organizationId], references: [id])
-  images            PropertyImage[]
-  units             PropertyUnit[]
+  id                       String                   @id @default(cuid())
+  externalId               String?                  @unique
+  listingType              String?
+  salePrice                Int?
+  sourceName               String?
+  sourceUrl                String?
+  sourceStatus             String?
+  sourceMetadata           Json?
+  title                    String
+  description              String
+  address                  String
+  city                     String
+  state                    String
+  zip                      String?
+  latitude                 Float?
+  longitude                Float?
+  rent                     Int
+  rentMax                  Int?
+  bedrooms                 Int
+  bathrooms                Int
+  sqft                     Int
+  amenities                String[]
+  specialOffers            String[]
+  contactPhone             String?
+  availabilityCount        Int                      @default(0)
+  status                   String                   @default("AVAILABLE")
+  availabilityStatusSource AvailabilityStatusSource @default(UNKNOWN)
+  publicationStatus        String                   @default("PENDING_REVIEW")
+  publicationStatusSource  String                   @default("AUTOMATIC")
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
+  organizationId           String?
+  applications             Application[]
+  programProperties        ProgramProperty[]
+  organization             Organization?            @relation(fields: [organizationId], references: [id])
+  images                   PropertyImage[]
+  units                    PropertyUnit[]
 
   @@unique([organizationId, id])
   @@index([organizationId])
@@ -1041,6 +1042,12 @@ enum Role {
   STAFF
   ADMIN
   SUPER_ADMIN
+}
+
+enum AvailabilityStatusSource {
+  AUTOMATIC
+  STAFF
+  UNKNOWN
 }
 
 enum OrganizationType {

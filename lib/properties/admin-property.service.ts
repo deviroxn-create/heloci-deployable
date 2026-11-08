@@ -3,6 +3,7 @@ import { documentStorageService } from "@/lib/documents/storage.service";
 import {
   PROPERTY_PUBLICATION_STATUSES
 } from "./property-review.service";
+import { getPropertyListingCategory } from "./listing-category";
 
 const propertyFields = {
   id: true,
@@ -27,6 +28,7 @@ const propertyFields = {
   contactPhone: true,
   availabilityCount: true,
   status: true,
+  availabilityStatusSource: true,
   publicationStatus: true,
   publicationStatusSource: true,
   organizationId: true,
@@ -113,6 +115,15 @@ function validatePropertyInput(input: Partial<PropertyInput>) {
 
 function toPropertyData(input: PropertyInput) {
   validatePropertyInput(input);
+  if (input.status === "AVAILABLE") {
+    const category = getPropertyListingCategory(input.listingType);
+    if (category === "SALE" && (!Number.isSafeInteger(input.salePrice) || (input.salePrice ?? 0) <= 0)) {
+      throw new Error("A valid sale price is required before making this property available");
+    }
+    if (category !== "SALE") {
+      throw new Error("Rental availability requires an existing valid available unit");
+    }
+  }
   return {
     externalId: input.externalId ?? null,
     title: input.title.trim(),
@@ -135,6 +146,7 @@ function toPropertyData(input: PropertyInput) {
     contactPhone: input.contactPhone ?? null,
     availabilityCount: input.availabilityCount ?? 0,
     status: input.status ?? "UNAVAILABLE",
+    availabilityStatusSource: input.status === undefined ? "UNKNOWN" as const : "STAFF" as const,
     publicationStatus: input.publicationStatus ?? "PENDING_REVIEW",
     publicationStatusSource: input.publicationStatus ? "STAFF" : "AUTOMATIC"
   };
@@ -166,10 +178,44 @@ export async function updatePropertyForOrganization(organizationId: string, prop
   const existing = await getPropertyForOrganization(organizationId, propertyId);
   if (!existing) throw new Error("PROPERTY_NOT_FOUND");
 
-  validatePropertyInput({ ...existing, ...input });
+  const { availabilityStatusSource: requestedAvailabilitySource, ...safeInput } = input as Partial<PropertyInput> & {
+    availabilityStatusSource?: unknown;
+  };
+  if (requestedAvailabilitySource !== undefined) {
+    throw new Error("availabilityStatusSource cannot be set directly");
+  }
+
+  const updatedProperty = { ...existing, ...safeInput };
+  validatePropertyInput(updatedProperty);
+  let availabilityCount = safeInput.availabilityCount;
+  if (safeInput.status === "AVAILABLE") {
+    const category = getPropertyListingCategory(updatedProperty.listingType);
+    if (category === "SALE") {
+      if (!Number.isSafeInteger(updatedProperty.salePrice) || (updatedProperty.salePrice ?? 0) <= 0) {
+        throw new Error("A valid sale price is required before making this property available");
+      }
+      availabilityCount = 0;
+    } else if (category === "RENT") {
+      const availableUnits = existing.units.filter((unit) =>
+        unit.available
+        && Number.isInteger(unit.beds)
+        && unit.beds >= 0
+        && Number.isSafeInteger(unit.price)
+        && unit.price > 0
+      );
+      if (!Number.isSafeInteger(updatedProperty.rent) || updatedProperty.rent <= 0 || availableUnits.length === 0) {
+        throw new Error("A valid rental price and at least one valid available unit are required before making this property available");
+      }
+      availabilityCount = availableUnits.length;
+    } else {
+      throw new Error("A recognized listing category is required before making this property available");
+    }
+  }
   const data = {
-    ...input,
-    ...(input.publicationStatus === undefined ? {} : { publicationStatusSource: "STAFF" })
+    ...safeInput,
+    ...(safeInput.status === undefined ? {} : { availabilityStatusSource: "STAFF" as const }),
+    ...(safeInput.status === "AVAILABLE" ? { availabilityCount } : {}),
+    ...(safeInput.publicationStatus === undefined ? {} : { publicationStatusSource: "STAFF" })
   };
   return prisma.property.update({
     where: { id: propertyId },
@@ -275,9 +321,26 @@ export async function deletePropertyImage(organizationId: string, propertyId: st
 }
 
 export async function syncPropertyAvailability(propertyId: string) {
-  const availableUnitCount = await prisma.propertyUnit.count({ where: { propertyId, available: true } });
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
+    select: { listingType: true, rent: true }
+  });
+  if (!property) throw new Error("PROPERTY_NOT_FOUND");
+  if (getPropertyListingCategory(property.listingType) !== "RENT") {
+    return prisma.property.findUnique({ where: { id: propertyId }, select: propertyFields });
+  }
+
+  const availableUnitCount = property.rent > 0
+    ? await prisma.propertyUnit.count({
+      where: { propertyId, available: true, beds: { gte: 0 }, price: { gt: 0 } }
+    })
+    : 0;
   return prisma.property.update({
     where: { id: propertyId },
-    data: { availabilityCount: availableUnitCount, status: availableUnitCount > 0 ? "AVAILABLE" : "UNAVAILABLE" }
+    data: {
+      availabilityCount: availableUnitCount,
+      status: availableUnitCount > 0 ? "AVAILABLE" : "UNAVAILABLE",
+      availabilityStatusSource: "STAFF"
+    }
   });
 }

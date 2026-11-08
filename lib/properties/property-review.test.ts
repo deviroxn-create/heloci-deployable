@@ -80,7 +80,6 @@ test("sale status variants in the Zillow record confirm availability", () => {
     { status: "Active" },
     { status: "For Sale" },
     { status: "House for sale" },
-    { marketing_status: "FOR_SALE" },
     { property_details: { status: "House for sale", status_text: "For Sale", marketing_status: "FOR_SALE" } }
   ];
 
@@ -95,10 +94,76 @@ test("sale status variants in the Zillow record confirm availability", () => {
   }
 });
 
+test("marketing status alone does not establish active sale availability", () => {
+  for (const sourceListing of [
+    { ...saleListing, status: undefined, status_text: undefined, marketing_status: "FOR_SALE" },
+    { ...saleListing, status: undefined, status_text: undefined, property_details: { marketing_status: "FOR_SALE" } }
+  ]) {
+    const result = evaluatePropertyForApproval({
+      ...completeSale,
+      sourceMetadata: { sourceListing }
+    });
+    assert.equal(result.availability, "UNCERTAIN");
+    assert.equal(result.decision, "PENDING_REVIEW");
+  }
+});
+
+test("sale availability does not require rental units", () => {
+  const result = evaluatePropertyForApproval({ ...completeSale, units: [] });
+
+  assert.equal(result.availability, "AVAILABLE");
+  assert.equal(result.decision, "PUBLISHED");
+  assert.equal(result.reasons.some((reason) => reason.includes("unit")), false);
+});
+
+test("sale availability does not require rental-specific bedroom, bathroom, or area fields", () => {
+  const result = evaluatePropertyForApproval({
+    ...completeSale,
+    bedrooms: 0,
+    bathrooms: 0,
+    sqft: 0,
+    sourceMetadata: {
+      sourceListing: {
+        ...saleListing,
+        bedrooms: undefined,
+        bathrooms: undefined,
+        living_area: undefined
+      }
+    }
+  });
+
+  assert.equal(result.availability, "AVAILABLE");
+  assert.equal(result.decision, "PUBLISHED");
+  assert.equal(result.reasons.some((reason) => /bedrooms|bathrooms|living_area/.test(reason)), false);
+});
+
+test("sale requires trusted identity, meaningful details, and a usable image", () => {
+  for (const partial of [
+    { externalId: "zillow:other" },
+    { description: "Short" },
+    { images: [{ url: "javascript:alert(1)" }] },
+    { title: "Zillow listing 1" },
+    { address: "" }
+  ]) {
+    const result = evaluatePropertyForApproval({ ...completeSale, ...partial });
+    assert.equal(result.decision, "PENDING_REVIEW");
+  }
+});
+
+test("sale availability requires a complete address including city and state", () => {
+  for (const partial of [{ city: "" }, { state: "" }]) {
+    const result = evaluatePropertyForApproval({ ...completeSale, ...partial });
+    assert.equal(result.availability, "AVAILABLE");
+    assert.equal(result.decision, "PENDING_REVIEW");
+    assert.ok(result.reasons.includes("address_incomplete"));
+  }
+});
+
 test("Zillow House for sale sample normalizes as an available sale with its purchase price", () => {
   const result = evaluatePropertyForApproval({
     ...completeSale,
     salePrice: 449900,
+    externalId: "zillow:52410627",
     sourceMetadata: {
       sourceListing: {
         ...saleListing,
@@ -144,7 +209,7 @@ test("missing address is sent for manual review", () => {
 test("sale availability is uncertain when source status is unknown", () => {
   const result = evaluatePropertyForApproval({
     ...completeSale,
-    sourceMetadata: { sourceListing: { ...saleListing, status_text: "For sale soon" } }
+    sourceMetadata: { sourceListing: { ...saleListing, status: "Unknown", status_text: "For sale soon", marketing_status: undefined } }
   });
 
   assert.equal(result.decision, "PENDING_REVIEW");
@@ -166,6 +231,7 @@ test("conflicting active and inactive sale statuses remain unavailable and requi
 test("confirmed unavailable properties are never published", () => {
   const rental = evaluatePropertyForApproval({
     ...completeRental,
+    sourceMetadata: { sourceListing: { ...rentalListing, status: "Rented", status_text: "Rented" } },
     status: "UNAVAILABLE",
     units: [{ available: false, beds: 2, price: 2400 }]
   });

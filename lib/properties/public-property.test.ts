@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { prisma } from "@/lib/prisma/client";
-import { countPublicProperties, getPublicPropertyById, listPublicProperties } from "./public-property.service";
+import {
+  countPublicProperties,
+  getPublicPropertyById,
+  listPublicProperties,
+  publicRentalListingWhere
+} from "./public-property.service";
 
 type PublicProperty = {
   id: string;
@@ -10,9 +15,9 @@ type PublicProperty = {
   status: string;
   publicationStatus: string;
   rent: number;
-  listingType?: string | null;
+  listingType: string | null;
   salePrice?: number | null;
-  units: Array<{ id: string; available: boolean }>;
+  units: Array<{ id: string; available: boolean; beds?: number; price?: number }>;
   images: Array<{ id: string; url: string; altText: string | null }>;
 };
 
@@ -22,7 +27,8 @@ const visibleRental: PublicProperty = {
   status: "AVAILABLE",
   publicationStatus: "PUBLISHED",
   rent: 1800,
-  units: [{ id: "unit-1", available: true }],
+  listingType: "For Rent",
+  units: [{ id: "unit-1", available: true, beds: 2, price: 1800 }],
   images: []
 };
 
@@ -38,22 +44,30 @@ const visibleSale: PublicProperty = {
   images: []
 };
 
-const saleListingTypes = ["For Sale", "for sale", "for_sale", "for-sale", "sale", "buy", "purchase"];
+const saleListingTypes = ["For Sale", "for_sale", "for-sale", "sale", "buy", "purchase"];
+const rentalListingTypes = ["For Rent", "for_rent", "for-rent", "rent", "rental", "lease"];
 
 function installPublicMocks(properties: PublicProperty[]) {
   const findManyCalls: Array<{ where?: Record<string, unknown> }> = [];
   const findFirstCalls: Array<{ where?: Record<string, unknown>; include?: unknown }> = [];
   const countCalls: Array<{ where?: Record<string, unknown> }> = [];
   const visible = (property: PublicProperty, where: Record<string, unknown>) => {
-    const sale = "salePrice" in where;
+    const subclauses = Array.isArray(where.OR) ? where.OR as Array<Record<string, unknown>> : [];
+    const sale = "salePrice" in where || subclauses.some((clause) => "salePrice" in clause);
+    const rent = "rent" in where || subclauses.some((clause) => "rent" in clause);
     const category = property.listingType?.trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
     const isSale = ["for sale", "sale", "buy", "purchase"].includes(category ?? "");
+    const isRent = ["for rent", "rent", "rental", "lease"].includes(category ?? "");
     return property.organizationId !== null
       && property.publicationStatus === "PUBLISHED"
       && property.status === "AVAILABLE"
-      && (sale
+      && (sale && !rent
         ? isSale && (property.salePrice ?? 0) > 0
-        : property.rent > 0 && !isSale && property.units.some((unit) => unit.available));
+        : rent && !sale
+          ? isRent && property.rent > 0 && property.units.some((unit) => unit.available && (unit.price ?? 0) > 0)
+          : isSale
+            ? (property.salePrice ?? 0) > 0
+            : isRent && property.rent > 0 && property.units.some((unit) => unit.available && (unit.price ?? 0) > 0));
   };
   prisma.property.findMany = (async (args: { where?: Record<string, unknown> }) => {
     findManyCalls.push(args);
@@ -75,9 +89,13 @@ const rentalWhere = {
   publicationStatus: "PUBLISHED",
   status: "AVAILABLE",
   rent: { gt: 0 },
-  OR: [{ listingType: null }, { listingType: { notIn: saleListingTypes, mode: "insensitive" } }],
-  units: { some: { available: true } }
+  listingType: { in: rentalListingTypes, mode: "insensitive" },
+  units: { some: { available: true, beds: { gte: 0 }, price: { gt: 0 } } }
 };
+
+test("homepage rental carousel uses the same strict rental-only eligibility filter", () => {
+  assert.deepEqual(publicRentalListingWhere, rentalWhere);
+});
 
 test("public rental listing returns only published rentals and keeps default pagination", async () => {
   const persistence = installPublicMocks([visibleRental]);
@@ -86,7 +104,10 @@ test("public rental listing returns only published rentals and keeps default pag
   assert.deepEqual(result, [visibleRental]);
   assert.deepEqual(persistence.findManyCalls[0], {
     where: rentalWhere,
-    include: { images: true },
+    include: {
+      images: true,
+      units: { where: { available: true, beds: { gte: 0 }, price: { gt: 0 } }, orderBy: [{ beds: "asc" }, { price: "asc" }] }
+    },
     orderBy: { updatedAt: "desc" },
     take: 6,
     skip: 0
@@ -99,7 +120,10 @@ test("public listing supports custom limit and offset", async () => {
 
   assert.deepEqual(persistence.findManyCalls[0], {
     where: rentalWhere,
-    include: { images: true },
+    include: {
+      images: true,
+      units: { where: { available: true, beds: { gte: 0 }, price: { gt: 0 } }, orderBy: [{ beds: "asc" }, { price: "asc" }] }
+    },
     orderBy: { updatedAt: "desc" },
     take: 12,
     skip: 24
@@ -194,7 +218,7 @@ test("public sale discovery requires publication, positive price, and available 
   assert.deepEqual(await countPublicProperties("SALE"), 1);
 });
 
-test("migration-backfilled public rentals retain their existing visibility", async () => {
+test("unknown and unrecognized listing categories are excluded from both discovery routes", async () => {
   const migration = readFileSync(
     "prisma/migrations/20261105170000_add_property_publication_review/migration.sql",
     "utf8"
@@ -207,10 +231,11 @@ test("migration-backfilled public rentals retain their existing visibility", asy
   assert.match(migration, /'Purchase', 'PURCHASE', 'purchase'/);
   assert.match(migration, /unit\."available" = TRUE/);
 
-  const legacyRental = { ...visibleRental, id: "legacy-public-rental" };
-  installPublicMocks([legacyRental]);
+  const unknownCategory = { ...visibleRental, id: "unknown-category", listingType: null };
+  installPublicMocks([unknownCategory]);
 
-  assert.deepEqual(await listPublicProperties(), [legacyRental]);
+  assert.deepEqual(await listPublicProperties(), []);
+  assert.deepEqual(await listPublicProperties({ listingType: "SALE" }), []);
 });
 
 test("public detail lookup recognizes published sale listings and excludes hidden listings", async () => {
@@ -227,9 +252,9 @@ test("public detail lookup recognizes published sale listings and excludes hidde
   assert.deepEqual(await getPublicPropertyById("unowned"), null);
   assert.deepEqual(await getPublicPropertyById("sale-visible"), visibleSale);
   assert.deepEqual(await getPublicPropertyById("sale-visible", "SALE"), visibleSale);
-  assert.equal(persistence.findFirstCalls.length, 8);
+  assert.equal(persistence.findFirstCalls.length, 5);
   assert.deepEqual(persistence.findFirstCalls[0]?.include, {
     images: true,
-    units: { where: { available: true }, orderBy: [{ beds: "asc" }, { price: "asc" }] }
+    units: { where: { available: true, beds: { gte: 0 }, price: { gt: 0 } }, orderBy: [{ beds: "asc" }, { price: "asc" }] }
   });
 });

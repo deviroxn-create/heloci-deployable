@@ -1,4 +1,5 @@
 export type ZillowSaleAvailability = "AVAILABLE" | "UNAVAILABLE" | "UNCERTAIN";
+export type ZillowRentalAvailability = ZillowSaleAvailability;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -21,16 +22,37 @@ const inactiveStatuses = [
   "closed",
   "inactive",
   "not available",
-  "unavailable"
+  "unavailable",
+  "rented"
 ];
 
 const activeSaleStatuses = new Set([
   "active",
   "for sale",
-  "house for sale"
+  "house for sale",
+  "condo for sale",
+  "townhouse for sale",
+  "multi family home for sale",
+  "home for sale"
 ]);
 
-function containsInactiveStatus(status: string): boolean {
+const activeRentalStatuses = new Set([
+  "active",
+  "for rent",
+  "apartment for rent",
+  "house for rent",
+  "townhouse for rent",
+  "for lease",
+  "available"
+]);
+
+const specialSaleStatusPatterns = [
+  /\bforeclosure\b/,
+  /\bfor sale by owner\b/,
+  /\bnew construction\b/
+];
+
+function isInactiveStatus(status: string): boolean {
   return inactiveStatuses.some((inactive) =>
     status === inactive
     || status.startsWith(`${inactive} `)
@@ -39,25 +61,46 @@ function containsInactiveStatus(status: string): boolean {
   );
 }
 
-export function normalizeZillowSaleAvailability(value: unknown): ZillowSaleAvailability {
+export function hasZillowSpecialSaleStatus(value: unknown): boolean {
+  return sourceStatuses(value).some((status) =>
+    specialSaleStatusPatterns.some((pattern) => pattern.test(status))
+  );
+}
+
+function sourceStatuses(value: unknown): string[] {
   const listing = asRecord(value);
-  if (!listing) return "UNCERTAIN";
+  if (!listing) return [];
   const details = asRecord(listing.property_details);
   const sourceValues = [
-    listing.listing_type,
     listing.status,
     listing.status_text,
-    listing.marketing_status,
     details?.status,
-    details?.status_text,
-    details?.marketing_status
+    details?.status_text
   ];
   const statuses = sourceValues
     .filter((status): status is string => typeof status === "string" && status.trim().length > 0)
     .map(normalizeStatus);
+  const marketingStatuses = [listing.marketing_status, details?.marketing_status]
+    .filter((status): status is string => typeof status === "string" && status.trim().length > 0)
+    .map(normalizeStatus);
+  statuses.push(...marketingStatuses.filter(isInactiveStatus));
+  return statuses;
+}
 
+function normalizeAvailability(statuses: string[], activeStatuses: Set<string>): ZillowSaleAvailability {
   if (statuses.length === 0) return "UNCERTAIN";
-  if (statuses.some(containsInactiveStatus)) return "UNAVAILABLE";
-  if (statuses.some((status) => !activeSaleStatuses.has(status))) return "UNCERTAIN";
-  return "AVAILABLE";
+  if (statuses.some(isInactiveStatus)) return "UNAVAILABLE";
+  if (statuses.some((status) => activeStatuses.has(status))) return "AVAILABLE";
+  return "UNCERTAIN";
+}
+
+export function normalizeZillowSaleAvailability(value: unknown): ZillowSaleAvailability {
+  const statuses = sourceStatuses(value);
+  const availability = normalizeAvailability(statuses, activeSaleStatuses);
+  if (availability === "UNAVAILABLE") return "UNAVAILABLE";
+  return hasZillowSpecialSaleStatus(value) ? "UNCERTAIN" : availability;
+}
+
+export function normalizeZillowRentalAvailability(value: unknown): ZillowRentalAvailability {
+  return normalizeAvailability(sourceStatuses(value), activeRentalStatuses);
 }

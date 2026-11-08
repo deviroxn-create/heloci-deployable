@@ -108,7 +108,7 @@ test("rental discovery requires active date-valid assignments, available units, 
   assert.equal(where.AND[0].OR[0].availableUntil, null);
   assert.ok(where.AND[0].OR[1].availableUntil && "gte" in where.AND[0].OR[1].availableUntil);
   assert.deepEqual(where.property, {
-      OR: [{ listingType: null }, { listingType: { notIn: ["For Sale", "FOR_SALE", "for sale", "FOR SALE", "sale", "SALE"] } }],
+    OR: [{ listingType: null }, { listingType: { notIn: ["For Sale", "FOR_SALE", "for sale", "FOR SALE", "sale", "SALE"], mode: "insensitive" } }],
     status: "AVAILABLE",
     units: { some: { available: true } }
   });
