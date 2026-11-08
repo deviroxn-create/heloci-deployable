@@ -11,7 +11,23 @@ export const rentalListingTypeWhere: Prisma.PropertyWhereInput = {
 
 const publicRentalListingTypeWhere: Prisma.PropertyWhereInput = {
   listingType: {
-    in: ["For Rent", "for_rent", "for-rent", "rent", "rental", "lease"],
+    in: [
+      "For Rent",
+      "for_rent",
+      "for-rent",
+      "rent",
+      "rental",
+      "lease",
+      "House for rent",
+      "Apartment for rent",
+      "Condo for rent",
+      "Townhouse for rent",
+      "Multi family home for rent",
+      "Multi-family home for rent",
+      "Home for rent",
+      "Manufactured home for rent",
+      "Mobile home for rent"
+    ],
     mode: "insensitive"
   }
 };

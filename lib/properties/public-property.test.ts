@@ -45,7 +45,23 @@ const visibleSale: PublicProperty = {
 };
 
 const saleListingTypes = ["For Sale", "for_sale", "for-sale", "sale", "buy", "purchase"];
-const rentalListingTypes = ["For Rent", "for_rent", "for-rent", "rent", "rental", "lease"];
+const rentalListingTypes = [
+  "For Rent",
+  "for_rent",
+  "for-rent",
+  "rent",
+  "rental",
+  "lease",
+  "House for rent",
+  "Apartment for rent",
+  "Condo for rent",
+  "Townhouse for rent",
+  "Multi family home for rent",
+  "Multi-family home for rent",
+  "Home for rent",
+  "Manufactured home for rent",
+  "Mobile home for rent"
+];
 
 function installPublicMocks(properties: PublicProperty[]) {
   const findManyCalls: Array<{ where?: Record<string, unknown> }> = [];
@@ -57,7 +73,9 @@ function installPublicMocks(properties: PublicProperty[]) {
     const rent = "rent" in where || subclauses.some((clause) => "rent" in clause);
     const category = property.listingType?.trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
     const isSale = ["for sale", "sale", "buy", "purchase"].includes(category ?? "");
-    const isRent = ["for rent", "rent", "rental", "lease"].includes(category ?? "");
+    const isRent = rentalListingTypes.some((type) =>
+      type.toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ") === category
+    );
     return property.organizationId !== null
       && property.publicationStatus === "PUBLISHED"
       && property.status === "AVAILABLE"
@@ -112,6 +130,17 @@ test("public rental listing returns only published rentals and keeps default pag
     take: 6,
     skip: 0
   });
+});
+
+test("public rental discovery includes explicit Zillow rental category values", async () => {
+  const rentals = rentalListingTypes.map((listingType, index) => ({
+    ...visibleRental,
+    id: `rental-category-${index}`,
+    listingType
+  }));
+  installPublicMocks(rentals);
+
+  assert.deepEqual(await listPublicProperties(), rentals);
 });
 
 test("public listing supports custom limit and offset", async () => {
@@ -196,6 +225,24 @@ test("public rental discovery excludes sales and every unpublished state", async
   ]);
 
   assert.deepEqual(await listPublicProperties(), [visibleRental]);
+});
+
+test("public rental discovery does not fabricate availability for incomplete rental information", async () => {
+  const noPropertyRent = { ...visibleRental, id: "no-property-rent", rent: 0 };
+  const noAvailableUnits = {
+    ...visibleRental,
+    id: "no-available-units",
+    units: [{ id: "unavailable-unit", available: false, beds: 2, price: 1800 }]
+  };
+  const invalidUnitPrice = {
+    ...visibleRental,
+    id: "invalid-unit-price",
+    units: [{ id: "zero-price-unit", available: true, beds: 2, price: 0 }]
+  };
+
+  installPublicMocks([noPropertyRent, noAvailableUnits, invalidUnitPrice]);
+
+  assert.deepEqual(await listPublicProperties(), []);
 });
 
 test("public sale discovery requires publication, positive price, and available status but no units", async () => {
